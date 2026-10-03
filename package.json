@@ -1,0 +1,22 @@
+{
+  "name": "cockpit-orchestrator",
+  "version": "0.1.0",
+  "description": "Cockpit UI for the Agent Orchestrator",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node src/server.js",
+    "build": "echo 'No build needed'",
+    "start": "node src/server.js"
+  },
+  "keywords": ["cockpit", "orchestrator", "ui"],
+  "author": "Joshua Minton",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "axios": "^1.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

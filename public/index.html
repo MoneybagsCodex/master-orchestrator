@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cockpit Orchestrator</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f1419;
+      color: #e0e7ff;
+      line-height: 1.6;
+    }
+
+    .header {
+      background: linear-gradient(90deg, #1e3a8a 0%, #1e1b4b 100%);
+      border-bottom: 1px solid #3730a3;
+      padding: 16px 24px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 600;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .input-section {
+      background: #1a1f2e;
+      border: 1px solid #312e81;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .input-group {
+      flex: 1;
+    }
+
+    .input-label {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: #6366f1;
+      margin-bottom: 6px;
+      font-weight: 600;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 10px 12px;
+      background: #111318;
+      border: 1px solid #312e81;
+      border-radius: 6px;
+      color: #e0e7ff;
+      font-size: 14px;
+    }
+
+    .input-field:focus {
+      outline: none;
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+    }
+
+    .button {
+      padding: 10px 24px;
+      background: #6366f1;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+      height: 40px;
+    }
+
+    .button:hover {
+      background: #4f46e5;
+      transform: translateY(-1px);
+    }
+
+    .button:active {
+      transform: translateY(0);
+    }
+
+    .status-section {
+      background: #1a1f2e;
+      border: 1px solid #312e81;
+      border-radius: 10px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .status-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .status-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      color: #6366f1;
+      font-weight: 600;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .status-dot.offline {
+      background: #ef4444;
+    }
+
+    .mission-display {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 24px;
+      min-height: 80px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+
+    .mission-title {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .mission-meta {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+    }
+
+    .progress-bar {
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 8px;
+      height: 24px;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .progress-fill {
+      background: #10b981;
+      height: 100%;
+      width: 0%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      transition: width 0.4s ease;
+    }
+
+    .phases-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .phase-card {
+      background: #1a1f2e;
+      border: 1px solid #312e81;
+      border-radius: 8px;
+      padding: 12px;
+      text-align: center;
+    }
+
+    .phase-status {
+      font-size: 20px;
+      margin-bottom: 4px;
+    }
+
+    .phase-name {
+      font-size: 12px;
+      color: #a5b4fc;
+      margin-bottom: 4px;
+    }
+
+    .phase-state {
+      font-size: 11px;
+      color: #818cf8;
+    }
+
+    .log-section {
+      background: #1a1f2e;
+      border: 1px solid #312e81;
+      border-radius: 10px;
+      padding: 16px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .log-title {
+      font-size: 13px;
+      text-transform: uppercase;
+      color: #6366f1;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .log-entry {
+      font-size: 12px;
+      color: #a5b4fc;
+      padding: 6px 0;
+      border-bottom: 1px solid #312e81;
+      font-family: 'Monaco', 'Courier New', monospace;
+    }
+
+    .log-entry:last-child {
+      border-bottom: none;
+    }
+
+    .log-entry.event {
+      color: #10b981;
+    }
+
+    .log-entry.error {
+      color: #ef4444;
+    }
+
+    .loading {
+      display: inline-block;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎯 Cockpit Orchestrator</h1>
+  </div>
+
+  <div class="container">
+    <!-- Input Section -->
+    <div class="input-section">
+      <div class="input-group" style="flex: 1;">
+        <div class="input-label">Mission Command (voice or text)</div>
+        <input type="text" id="commandInput" class="input-field" placeholder="e.g., Deploy v2.1.0 to production">
+      </div>
+      <button class="button" id="submitBtn" onclick="submitCommand()">Send Mission</button>
+    </div>
+
+    <!-- Orchestrator Status -->
+    <div class="status-section">
+      <div class="status-header">
+        <div class="status-title">Orchestrator Connection</div>
+        <div class="status-indicator">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">Connecting...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mission Display -->
+    <div id="missionDisplay" style="display: none;">
+      <div class="mission-display">
+        <div class="mission-title" id="missionTitle">No active mission</div>
+        <div class="mission-meta">
+          <span>Risk: <span id="riskLevel">—</span></span>
+          <span>Progress: <span id="progressPercent">0%</span></span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase Cards -->
+    <div id="phasesContainer" class="phases-grid" style="display: none;"></div>
+
+    <!-- Log -->
+    <div class="log-section">
+      <div class="log-title">Execution Log</div>
+      <div id="logContainer"></div>
+    </div>
+  </div>
+
+  <script>
+    const commandInput = document.getElementById('commandInput');
+    const submitBtn = document.getElementById('submitBtn');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const logContainer = document.getElementById('logContainer');
+    const missionDisplay = document.getElementById('missionDisplay');
+    const phasesContainer = document.getElementById('phasesContainer');
+
+    let isConnected = false;
+    let currentMission = null;
+    let updateInterval = null;
+
+    // Check orchestrator connection on load
+    async function checkConnection() {
+      try {
+        const response = await fetch('/api/orchestrator/status', { timeout: 2000 });
+        if (response.ok) {
+          isConnected = true;
+          statusDot.classList.remove('offline');
+          statusText.textContent = '✓ Connected';
+        } else {
+          throw new Error('Not connected');
+        }
+      } catch (error) {
+        isConnected = false;
+        statusDot.classList.add('offline');
+        statusText.textContent = '✗ Orchestrator offline (port 3003)';
+        logEntry('error', 'Orchestrator not reachable. Make sure it\'s running: cd ~/projects/agent-orchestrator && npm run demo', true);
+      }
+    }
+
+    // Submit mission command
+    async function submitCommand() {
+      const command = commandInput.value.trim();
+      if (!command) return;
+
+      if (!isConnected) {
+        alert('Orchestrator is not connected. Please start it first:\ncd ~/projects/agent-orchestrator && npm run demo');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ Sending...';
+      logEntry('event', `Submitting mission: "${command}"`);
+
+      try {
+        const response = await fetch('/api/orchestrator/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to send command');
+        }
+
+        const data = await response.json();
+        logEntry('event', `✓ Mission accepted: ${data.summary}`);
+
+        currentMission = {
+          title: command,
+          summary: data.summary,
+          riskLevel: 'low'
+        };
+
+        missionDisplay.style.display = 'block';
+        document.getElementById('missionTitle').textContent = `🚀 ${command}`;
+
+        commandInput.value = '';
+        commandInput.placeholder = 'Next mission...';
+
+        // Start polling for updates
+        startPolling();
+      } catch (error) {
+        logEntry('error', `Failed: ${error.message}`);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Send Mission';
+      }
+    }
+
+    // Poll orchestrator for status updates
+    function startPolling() {
+      if (updateInterval) clearInterval(updateInterval);
+
+      updateInterval = setInterval(async () => {
+        try {
+          const response = await fetch('/api/orchestrator/status');
+          if (!response.ok) throw new Error('Failed to fetch status');
+
+          const data = await response.json();
+
+          // Update mission display
+          if (data.phases) {
+            updatePhases(data.phases);
+            updateProgress(data.progress);
+            updateRiskLevel(data.riskLevel);
+          }
+
+          // Check if mission is complete
+          if (data.progress && data.progress.percentComplete === 100) {
+            logEntry('event', '✓ Mission complete!');
+            clearInterval(updateInterval);
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 1000);
+    }
+
+    function updatePhases(phases) {
+      phasesContainer.style.display = phases.length > 0 ? 'grid' : 'none';
+      phasesContainer.innerHTML = '';
+
+      for (const phase of phases) {
+        const statusEmoji = phase.state === 'done' ? '✓' :
+                          phase.state === 'running' ? '⏳' :
+                          phase.state === 'blocked' ? '⚠️' : '⚫';
+
+        const card = document.createElement('div');
+        card.className = 'phase-card';
+        card.innerHTML = `
+          <div class="phase-status">${statusEmoji}</div>
+          <div class="phase-name">${phase.description.split(' ').slice(0, 2).join(' ')}</div>
+          <div class="phase-state">${phase.state}</div>
+        `;
+        phasesContainer.appendChild(card);
+      }
+    }
+
+    function updateProgress(progress) {
+      const percent = progress.percentComplete;
+      document.getElementById('progressFill').style.width = percent + '%';
+      document.getElementById('progressFill').textContent = percent + '%';
+      document.getElementById('progressPercent').textContent = percent + '%';
+    }
+
+    function updateRiskLevel(risk) {
+      const color = risk === 'low' ? '🟢' : risk === 'medium' ? '🟡' : '🔴';
+      document.getElementById('riskLevel').textContent = color + ' ' + risk;
+    }
+
+    function logEntry(type, message, immediate = false) {
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      const timestamp = new Date().toLocaleTimeString();
+      entry.textContent = `[${timestamp}] ${message}`;
+      logContainer.insertBefore(entry, logContainer.firstChild);
+
+      if (logContainer.children.length > 50) {
+        logContainer.removeChild(logContainer.lastChild);
+      }
+    }
+
+    // Initialize
+    checkConnection();
+    setInterval(checkConnection, 5000);
+
+    // Allow Enter key to submit
+    commandInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') submitCommand();
+    });
+
+    logEntry('event', 'Cockpit Orchestrator loaded. Ready for missions.');
+  </script>
+</body>
+</html>
