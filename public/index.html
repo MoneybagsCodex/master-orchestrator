@@ -327,7 +327,12 @@
     // Check orchestrator connection on load
     async function checkConnection() {
       try {
-        const response = await fetch('/api/orchestrator/status', { timeout: 2000 });
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        const response = await fetch('/api/orchestrator/status', { signal: controller.signal });
+        clearTimeout(timeoutId);
+
         if (response.ok) {
           isConnected = true;
           statusDot.classList.remove('offline');
@@ -339,7 +344,7 @@
         isConnected = false;
         statusDot.classList.add('offline');
         statusText.textContent = '✗ Orchestrator offline (port 3003)';
-        logEntry('error', 'Orchestrator not reachable. Make sure it\'s running: cd ~/projects/agent-orchestrator && npm run demo', true);
+        logEntry('error', 'Orchestrator not reachable. Make sure it\'s running: cd ~/projects/agent-orchestrator && npm run server', true);
       }
     }
 
