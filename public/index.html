@@ -304,6 +304,12 @@
     <!-- Phase Cards -->
     <div id="phasesContainer" class="phases-grid" style="display: none;"></div>
 
+    <!-- Master Agent Response -->
+    <div id="responseSection" style="display: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 10px; padding: 20px; margin-bottom: 24px;">
+      <div style="font-size: 13px; text-transform: uppercase; color: rgba(255,255,255,0.8); margin-bottom: 12px; font-weight: 600;">Master Agent Response</div>
+      <div id="responseText" style="font-size: 15px; color: white; line-height: 1.6;"></div>
+    </div>
+
     <!-- Log -->
     <div class="log-section">
       <div class="log-title">Execution Log</div>
@@ -323,6 +329,7 @@
     let isConnected = false;
     let currentMission = null;
     let updateInterval = null;
+    let responseInterval = null;
 
     // Check orchestrator connection on load
     async function checkConnection() {
@@ -420,11 +427,33 @@
           if (data.progress && data.progress.percentComplete === 100) {
             logEntry('event', '✓ Mission complete!');
             clearInterval(updateInterval);
+            startResponsePolling();
           }
         } catch (error) {
           console.error('Polling error:', error);
         }
       }, 1000);
+    }
+
+    // Poll for master agent response
+    function startResponsePolling() {
+      if (responseInterval) clearInterval(responseInterval);
+
+      responseInterval = setInterval(async () => {
+        try {
+          const response = await fetch('/api/orchestrator/response');
+          if (!response.ok) throw new Error('Failed to fetch response');
+
+          const data = await response.json();
+
+          if (data.status === 'complete' && data.message) {
+            displayResponse(data.message);
+            clearInterval(responseInterval);
+          }
+        } catch (error) {
+          console.error('Response polling error:', error);
+        }
+      }, 500);
     }
 
     function updatePhases(phases) {
@@ -469,6 +498,14 @@
       if (logContainer.children.length > 50) {
         logContainer.removeChild(logContainer.lastChild);
       }
+    }
+
+    function displayResponse(message) {
+      const responseSection = document.getElementById('responseSection');
+      const responseText = document.getElementById('responseText');
+      responseText.textContent = message;
+      responseSection.style.display = 'block';
+      logEntry('event', 'Master agent response received');
     }
 
     // Initialize

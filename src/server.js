@@ -49,6 +49,17 @@ app.post('/api/orchestrator/command', async (req, res) => {
   }
 });
 
+// Get master agent response
+app.get('/api/orchestrator/response', async (req, res) => {
+  try {
+    const response = await axios.get(`${ORCHESTRATOR_URL}/response`, { timeout: 10000 });
+    res.json(response.data);
+  } catch (error) {
+    console.error('Response error:', error.message);
+    res.status(503).json({ error: 'Failed to get response from orchestrator' });
+  }
+});
+
 // Serve the main page
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, '../public/index.html'));
