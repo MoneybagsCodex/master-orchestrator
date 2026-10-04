@@ -372,7 +372,6 @@
     // Terminal list comes via the orchestrator, which merges in cockpit labels (older bridges lack them).
     const BRIDGE_URL = ORCHESTRATOR_URL;
 
-    let inflight = 0;
     const terminals = new Map(); // Map of sid -> {terminal, fitAddon}
 
     // Add a message to the chat
@@ -392,85 +391,82 @@
         .replace(/`([^`]+)`/g, '<code>$1</code>');
     }
 
-    // Send a message to the orchestrator
+    // ---- Chat: driven by the orchestrator's live event stream (/events) ----
+    let currentBubble = null;   // assistant bubble being filled for the current turn
+    let replyDiv = null, stepsDiv = null, replyText = '';
+    let lastSeq = 0;
+
+    function ensureBubble() {
+      if (currentBubble) return;
+      currentBubble = addMessage('assistant', '');
+      stepsDiv = document.createElement('div'); stepsDiv.className = 'steps';
+      replyDiv = document.createElement('div');
+      currentBubble.append(stepsDiv, replyDiv);
+      replyText = '';
+    }
+    function note(text, cls) {
+      const n = document.createElement('div');
+      n.className = 'sys-note' + (cls ? ' ' + cls : '');
+      n.textContent = text;
+      messagesContainer.appendChild(n);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    const NOTICE_TEXT = {
+      held: '⏸ A message is on hold: the agent\'s user has to approve it before the agent sees it',
+      released: '▶ Held message approved and delivered',
+      denied: '✕ A held message was denied',
+      expired: '⌛ A held message expired without being delivered',
+      refused: '✕ An agent refused cross-session messages',
+    };
+
+    function handleEvent(e) {
+      lastSeq = Math.max(lastSeq, e.seq || 0);
+      if (e.kind === 'user') { addMessage('user', e.text); currentBubble = null; stopBtn.style.display = 'inline-block'; }
+      else if (e.kind === 'tool') {
+        ensureBubble();
+        const s = document.createElement('div'); s.textContent = '→ ' + e.command; stepsDiv.appendChild(s);
+      } else if (e.kind === 'text') {
+        ensureBubble();
+        replyText += (replyText ? '\n\n' : '') + e.text;
+        replyDiv.innerHTML = renderReply(replyText);
+      } else if (e.kind === 'turn') {
+        if (e.state === 'start') stopBtn.style.display = 'inline-block';
+        else { stopBtn.style.display = 'none'; currentBubble = null; }
+      } else if (e.kind === 'peer') {
+        note('↩ Message from ' + (e.fromName || 'an agent') + ': ' + e.text.slice(0, 180));
+        currentBubble = null;
+      } else if (e.kind === 'notice') {
+        if (e.state === 'idle') note('✓ ' + (e.text.match(/^"([^"]+)"/)?.[1] || 'An agent') + ' finished what it was doing');
+        else note(NOTICE_TEXT[e.state] || e.text);
+      } else if (e.kind === 'error') {
+        ensureBubble(); replyDiv.textContent = '❌ ' + e.text; currentBubble = null; stopBtn.style.display = 'none';
+      }
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      refreshSoon();
+    }
+
+    let es = null;
+    function connectEvents() {
+      if (es) es.close();
+      es = new EventSource(`${ORCHESTRATOR_URL}/events` + (lastSeq ? `?since=${lastSeq}` : ''));
+      es.onmessage = (m) => { try { handleEvent(JSON.parse(m.data)); } catch (err) { /* ignore */ } };
+      es.onerror = () => { es.close(); setTimeout(connectEvents, 1500); };   // reconnect, replaying what we missed
+    }
+    let refreshTimer = null;
+    function refreshSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshTerminals, 600); }
+
+    // Send a message: the server echoes it back on the event stream, which is what draws the bubble.
     async function sendMessage() {
       const message = messageInput.value.trim();
       if (!message) return;
-
-      // You can keep typing while the orchestrator works: follow-ups queue on the server and run next.
-      addMessage('user', message);
       messageInput.value = '';
-      inflight++;
-      stopBtn.style.display = 'inline-block';
-
-      const assistantDiv = addMessage('assistant', '');
-      assistantDiv.classList.add('streaming');
-      const stepsDiv = document.createElement('div');
-      stepsDiv.className = 'steps';
-      const replyDiv = document.createElement('div');
-      assistantDiv.append(stepsDiv, replyDiv);
-      let buffer = '';
-      let queuedNote = false;
-
       try {
-        const response = await fetch(`${ORCHESTRATOR_URL}/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+        await fetch(`${ORCHESTRATOR_URL}/chat`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ message, model: modelPicker.value }),
         });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        // Parse Server-Sent Events
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-
-        let pending = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          // An SSE line can straddle two network chunks; only parse complete lines.
-          pending += decoder.decode(value, { stream: true });
-          const lines = pending.split('\n');
-          pending = lines.pop();
-
-          for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            try {
-              const evt = JSON.parse(line.slice(6));
-              if (evt.queued) {
-                replyDiv.textContent = '⏳ Queued: I will get to this as soon as I finish the current task.';
-                queuedNote = true;
-              } else if (evt.tool) {
-                if (queuedNote) { replyDiv.textContent = ''; queuedNote = false; }
-                const s = document.createElement('div');
-                s.textContent = '→ ' + evt.tool;
-                stepsDiv.appendChild(s);
-              } else if (evt.text) {
-                queuedNote = false;
-                buffer += (buffer ? '\n\n' : '') + evt.text;
-                replyDiv.innerHTML = renderReply(buffer);
-              }
-              messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            } catch (e) {
-              // Skip malformed JSON
-            }
-          }
-        }
-
-        assistantDiv.classList.remove('streaming');
-      } catch (error) {
-        replyDiv.textContent = `❌ Error: ${error.message}`;
-        assistantDiv.classList.remove('streaming');
-      } finally {
-        inflight--;
-        if (inflight <= 0) { inflight = 0; stopBtn.style.display = 'none'; }
-
-        // Refresh terminal list after agent completes
-        setTimeout(refreshTerminals, 500);
+      } catch (err) {
+        note('❌ Could not reach the orchestrator: ' + err.message);
       }
     }
 
@@ -541,36 +537,28 @@
       refreshTerminals();
     });
 
-    // Restore the conversation after a refresh: the orchestrator's session persists server-side.
-    let lastHistoryCount = 0;
+    // Restore the conversation after a refresh (the orchestrator session persists server-side), then go live.
     async function restoreHistory() {
       try {
         const { messages, busy } = await fetch(`${ORCHESTRATOR_URL}/history`).then((r) => r.json());
-        // A reply still running when the page was (re)loaded: its live stream is gone, so keep
-        // re-reading the transcript until the orchestrator finishes. Skip while this page is streaming.
-        if (busy && inflight === 0) { stopBtn.style.display = 'inline-block'; setTimeout(restoreHistory, 3000); }
-        else if (inflight === 0) stopBtn.style.display = 'none';
-        if (inflight > 0 || !messages || !messages.length) return;
-        if (messages.length === lastHistoryCount) return;   // nothing new: don't redraw
-        lastHistoryCount = messages.length;
-        messagesContainer.innerHTML = '';
-        for (const m of messages) {
-          if (m.role === 'user') { addMessage('user', m.text); continue; }
-          if (m.role === 'system') { const n = document.createElement('div'); n.className = 'sys-note'; n.textContent = '↩ ' + m.text; messagesContainer.appendChild(n); continue; }
-          const div = addMessage('assistant', '');
-          const steps = document.createElement('div');
-          steps.className = 'steps';
-          for (const st of m.steps || []) { const s = document.createElement('div'); s.textContent = '→ ' + st; steps.appendChild(s); }
-          const reply = document.createElement('div');
-          reply.innerHTML = renderReply(m.text || '');
-          div.append(steps, reply);
+        stopBtn.style.display = busy ? 'inline-block' : 'none';
+        if (messages && messages.length) {
+          messagesContainer.innerHTML = '';
+          for (const m of messages) {
+            if (m.role === 'user') { addMessage('user', m.text); continue; }
+            if (m.role === 'system') { note('↩ ' + m.text); continue; }
+            const div = addMessage('assistant', '');
+            const steps = document.createElement('div'); steps.className = 'steps';
+            for (const st of m.steps || []) { const x = document.createElement('div'); x.textContent = '→ ' + st; steps.appendChild(x); }
+            const reply = document.createElement('div'); reply.innerHTML = renderReply(m.text || '');
+            div.append(steps, reply);
+          }
+          messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
-        messagesContainer.scrollTop = messagesContainer.scrollHeight;
       } catch (e) { /* no history yet */ }
+      connectEvents();
     }
     restoreHistory();
-    // Replies the orchestrator sends on its own (an agent finished something you delegated) appear without a reload.
-    setInterval(() => { if (inflight === 0) restoreHistory(); }, 5000);
 
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
