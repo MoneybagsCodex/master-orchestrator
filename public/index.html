@@ -288,6 +288,20 @@
     .task span { flex: none; } .task em { flex: none; font-style: normal; color: #cbd5e1; }
     .task i { margin-left: auto; font-style: normal; color: #64748b; font-size: 11px; flex: none; }
     .task.waiting em { color: #fcd34d; } .task.stalled em, .task.lost em { color: #f87171; } .task.seen em, .task.reported em { color: #34d399; }
+    .agent-card { padding: 8px 11px; }
+    .row1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+    .ttl { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .row1 .pill { font-size: 10px; padding: 0 7px; flex: none; }
+    .badge { font-size: 10px; color: #fcd34d; flex: none; }
+    .mini { display: flex; gap: 3px; flex: none; opacity: .55; }
+    .agent-card:hover .mini { opacity: 1; }
+    .mini button { width: 22px; height: 20px; padding: 0; font-size: 11px; background: #1e293b; color: #cbd5e1; border: 1px solid #312e81; border-radius: 4px; cursor: pointer; }
+    .mini button:hover { border-color: #6366f1; color: #fff; }
+    .wk { font-size: 12px; color: #e2e8f0; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wk.pending { color: #64748b; font-style: italic; }
+    .latest { font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
     .headline { font-size: 13px; color: #e2e8f0; margin: 2px 0 4px; }
     .doing { font-size: 12px; color: #fcd34d; margin-bottom: 4px; }
     .turns { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
@@ -477,7 +491,10 @@
         currentBubble = null;
       } else if (e.kind === 'notice') {
         if (e.state === 'idle') note('✓ ' + (e.text.match(/^"([^"]+)"/)?.[1] || 'An agent') + ' finished what it was doing');
-        else note(NOTICE_TEXT[e.state] || e.text);
+        else if (e.state === 'sent') {
+          const ag = (lastStatus?.agents || []).find((x) => x.peer === e.text || x.name === e.text);
+          note('⏳ Sent to ' + (ag ? `“${ag.topic || ag.label}”` : e.text) + ': waiting for its reply');
+        } else note(NOTICE_TEXT[e.state] || e.text);
       } else if (e.kind === 'notify') {
         toast(`${e.title}: ${e.text}`.slice(0, 220), e.level);
         try { if (window.Notification && Notification.permission === 'granted') new Notification(e.title, { body: e.text }); } catch (err) { /* ignore */ }
@@ -544,7 +561,8 @@
       denied: ['✕', 'denied', 'stalled'], expired: ['⌛', 'expired', 'stalled'], refused: ['✕', 'refused', 'stalled'],
     };
     const TASK_LABEL = { waiting: ['⏳', 'waiting for reply'], seen: ['✓', 'answered'], reported: ['✓', 'answered'], stalled: ['⚠', 'no reply'], lost: ['?', 'lost track'] };
-    const expanded = new Set();
+    const expanded = new Set();   // tiles opened to full detail
+    const rawOpen = new Set();    // tiles showing the raw screen
     const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const ago = (s) => s == null ? '' : s < 5 ? 'just now' : s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
     let standingOpen = false;
@@ -568,26 +586,32 @@
       const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
       const open = expanded.has(a.sid);
       const turns = (a.turns || []).slice(-4);
-      const headline = [...turns].reverse().find((t) => !t.loop && t.asked);
+      const real = [...turns].reverse().find((t) => !t.loop && t.asked);
+      const latest = turns[turns.length - 1];
+      // "Working on" is a model-written goal; until it is ready show the literal request, clearly muted.
+      const working = a.headline
+        ? `<div class="wk">Working on: ${esc(a.headline)}</div>`
+        : (real ? `<div class="wk pending">${esc(real.asked.slice(0, 80))}…</div>` : '');
+      const mini = `<span class="mini"><button data-act="compact" data-sid="${esc(a.sid)}" title="Compact its context">⇣</button><button data-act="retest" data-sid="${esc(a.sid)}" title="Ask it to re-run its tests">↻</button><button data-act="stop" data-sid="${esc(a.sid)}" title="Interrupt what it is doing">■</button></span>`;
       const msgs = (a.messages || []).map((m) => { const [ic, lb, cls] = MSG_STATE[m.state] || ['•', m.state, '']; return `<div class="task ${cls}"><span>${ic}</span><em>${lb}</em> ${esc(m.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - m.sentAt))}</i></div>`; });
       const tasks = (a.tasks || []).map((t) => { const [ic, lb] = TASK_LABEL[t.status] || ['•', t.status]; return `<div class="task ${t.status}"><span>${ic}</span><em>${lb}</em> ${esc(t.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - t.sentAt))}</i></div>`; });
-      return `<div class="agent-card" data-sid="${esc(a.sid)}">
-        <div class="agent-top"><span class="dot" style="background:${color}"></span><b>${esc(a.topic || a.label)}</b>
-          <span class="pill" style="color:${color};border-color:${color}">${name}</span><span class="muted">${ago(a.secondsSinceActivity)}</span></div>
-        <div class="muted" style="margin:-2px 0 6px 17px">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong)</div>
-        ${headline ? `<div class="headline">Working on: ${esc(headline.asked.slice(0, 120))}</div>` : ''}
-        ${a.doing ? `<div class="doing">⏳ now: ${esc(a.doing)}</div>` : ''}
-        ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: it is stopped at a permission prompt${a.prompt ? ` (${esc(a.prompt)})` : ''}.</div>` : ''}
-        ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
-        <div class="turns">${turns.map(turnRow).join('') || '<div class="muted">No turns recorded yet.</div>'}</div>
-        ${msgs.length || tasks.length ? `<div class="tasks">${msgs.join('')}${tasks.join('')}</div>` : ''}
-        <div class="qa">
-          <button data-act="compact" data-sid="${esc(a.sid)}">Compact</button>
-          <button data-act="retest" data-sid="${esc(a.sid)}">Retest</button>
-          <button data-act="stop" data-sid="${esc(a.sid)}">Stop</button>
-          <span class="muted" style="margin-left:auto">${open ? 'hide' : 'show'} raw screen</span>
-        </div>
-        ${open ? `<pre class="raw" data-raw="${esc(a.sid)}">loading…</pre>` : ''}
+      const pendingMsgs = (a.messages || []).filter((m) => m.state === 'sent' || m.state === 'released' || m.state === 'held').length;
+      const oneLine = latest ? (latest.loop ? `🔁 Goal loop ×${latest.loop.count}` : `› ${esc((latest.said || latest.asked).slice(0, 110))}`) : '';
+      return `<div class="agent-card ${open ? 'open' : ''}" data-sid="${esc(a.sid)}">
+        <div class="row1"><span class="dot" style="background:${color}"></span><b class="ttl">${esc(a.topic || a.label)}</b>
+          <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
+        ${working}
+        ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: permission prompt${a.prompt ? ` (${esc(a.prompt.slice(0, 80))})` : ''}.</div>` : ''}
+        ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
+        ${!open && oneLine ? `<div class="latest">${oneLine}</div>` : ''}
+        ${open ? `
+          ${a.doing ? `<div class="doing">⏳ now: ${esc(a.doing)}</div>` : ''}
+          ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
+          <div class="turns">${turns.map(turnRow).join('') || '<div class="muted">No turns recorded yet.</div>'}</div>
+          ${msgs.length || tasks.length ? `<div class="tasks">${msgs.join('')}${tasks.join('')}</div>` : ''}
+          <div class="muted small">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong) · ${ago(a.secondsSinceActivity)}
+            · <button class="linkbtn" data-raw-toggle="${esc(a.sid)}">${rawOpen.has(a.sid) ? 'hide' : 'show'} raw screen</button></div>
+          ${rawOpen.has(a.sid) ? `<pre class="raw" data-raw="${esc(a.sid)}">loading…</pre>` : ''}` : ''}
       </div>`;
     }
 
@@ -627,7 +651,7 @@
         if (typing) return;
         terminalsContainer.innerHTML = needsLane(st.needsYou || []) + summaryStrip(st)
           + (agents.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
-        for (const sid of expanded) {
+        for (const sid of rawOpen) {
           const pre = terminalsContainer.querySelector(`[data-raw="${sid}"]`);
           if (pre) fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).then((tl) => {
             const s = (tl.sessions || []).find((x) => x.sid === sid);
@@ -678,6 +702,7 @@
         const res = await post('/decide', { id: btn.dataset.id, decision: btn.dataset.decide });
         toast(res.message || 'Done', res.ok ? 'info' : 'warn'); refreshTerminals(); return;
       }
+      if (btn && btn.dataset.rawToggle) { const k = btn.dataset.rawToggle; rawOpen.has(k) ? rawOpen.delete(k) : rawOpen.add(k); refreshTerminals(); return; }
       if (btn && btn.dataset.delStanding) { await post('/standing/' + btn.dataset.delStanding); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return; }
       if (btn && btn.id === 'standingAdd') {
         const inp = document.getElementById('standingInput'); const text = inp.value.trim(); if (!text) return;
