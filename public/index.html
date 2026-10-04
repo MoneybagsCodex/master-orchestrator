@@ -261,6 +261,23 @@
       opacity: 0.7;
     }
 
+    .agent-card {
+      background: #111318; border: 1px solid #312e81; border-radius: 8px;
+      padding: 12px 14px; cursor: pointer; font-size: 13px; line-height: 1.45;
+    }
+    .agent-card:hover { border-color: #6366f1; }
+    .agent-top { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .agent-top b { font-size: 14px; flex: 1; }
+    .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+    .pill { font-size: 11px; border: 1px solid; border-radius: 10px; padding: 1px 8px; }
+    .muted { color: #64748b; font-size: 11px; }
+    .small { margin-top: 6px; }
+    .row { color: #cbd5e1; margin-top: 3px; }
+    .row span { color: #64748b; display: inline-block; width: 74px; font-size: 11px; text-transform: uppercase; }
+    .blocked { background: rgba(245,158,11,.12); border: 1px solid #f59e0b; color: #fcd34d; border-radius: 6px; padding: 6px 8px; margin: 6px 0; }
+    .note { color: #94a3b8; font-size: 12px; margin: 4px 0; }
+    .raw { background: #0a0e27; border-radius: 6px; padding: 8px; margin-top: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
+
     .steps {
       font-size: 11px;
       color: #64748b;
@@ -313,6 +330,7 @@
           autocomplete="off"
         />
         <button class="mic-btn" id="micBtn" title="Dictate (click, speak, it sends when you pause)">🎤</button>
+        <button class="mic-btn" id="stopBtn" style="display:none" title="Stop the task the orchestrator is working on">■ Stop</button>
         <button class="send-btn" id="sendBtn">Send</button>
       </div>
     </div>
@@ -320,7 +338,7 @@
     <!-- RIGHT: Live Terminals -->
     <div class="terminals-panel">
       <div class="terminals-header">
-        <h2>📊 Live Terminals</h2>
+        <h2>🧭 Your agents</h2>
       </div>
 
       <div id="terminalsContainer" class="terminals-content">
@@ -335,6 +353,7 @@
   <script>
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
+    const stopBtn = document.getElementById('stopBtn');
     const messagesContainer = document.getElementById('messagesContainer');
     const modelPicker = document.getElementById('modelPicker');
     const terminalsContainer = document.getElementById('terminalsContainer');
@@ -343,7 +362,7 @@
     // Terminal list comes via the orchestrator, which merges in cockpit labels (older bridges lack them).
     const BRIDGE_URL = ORCHESTRATOR_URL;
 
-    let isStreaming = false;
+    let inflight = 0;
     const terminals = new Map(); // Map of sid -> {terminal, fitAddon}
 
     // Add a message to the chat
@@ -366,12 +385,13 @@
     // Send a message to the orchestrator
     async function sendMessage() {
       const message = messageInput.value.trim();
-      if (!message || isStreaming) return;
+      if (!message) return;
 
+      // You can keep typing while the orchestrator works: follow-ups queue on the server and run next.
       addMessage('user', message);
       messageInput.value = '';
-      sendBtn.disabled = true;
-      isStreaming = true;
+      inflight++;
+      stopBtn.style.display = 'inline-block';
 
       const assistantDiv = addMessage('assistant', '');
       assistantDiv.classList.add('streaming');
@@ -380,6 +400,7 @@
       const replyDiv = document.createElement('div');
       assistantDiv.append(stepsDiv, replyDiv);
       let buffer = '';
+      let queuedNote = false;
 
       try {
         const response = await fetch(`${ORCHESTRATOR_URL}/chat`, {
@@ -410,11 +431,16 @@
             if (!line.startsWith('data: ')) continue;
             try {
               const evt = JSON.parse(line.slice(6));
-              if (evt.tool) {
+              if (evt.queued) {
+                replyDiv.textContent = '⏳ Queued: I will get to this as soon as I finish the current task.';
+                queuedNote = true;
+              } else if (evt.tool) {
+                if (queuedNote) { replyDiv.textContent = ''; queuedNote = false; }
                 const s = document.createElement('div');
                 s.textContent = '→ ' + evt.tool;
                 stepsDiv.appendChild(s);
               } else if (evt.text) {
+                queuedNote = false;
                 buffer += (buffer ? '\n\n' : '') + evt.text;
                 replyDiv.innerHTML = renderReply(buffer);
               }
@@ -430,89 +456,74 @@
         replyDiv.textContent = `❌ Error: ${error.message}`;
         assistantDiv.classList.remove('streaming');
       } finally {
-        sendBtn.disabled = false;
-        isStreaming = false;
+        inflight--;
+        if (inflight <= 0) { inflight = 0; stopBtn.style.display = 'none'; }
 
         // Refresh terminal list after agent completes
         setTimeout(refreshTerminals, 500);
       }
     }
 
-    // Refresh the list of live terminals
+    // One status card per agent, from the orchestrator's digest (the same data the orchestrator reads).
+    const STATE_STYLE = {
+      WORKING: ['#10b981', 'Working'],
+      IDLE: ['#64748b', 'Idle'],
+      BLOCKED: ['#f59e0b', 'Needs your decision'],
+      UNKNOWN: ['#64748b', 'Unknown'],
+    };
+    const expanded = new Set();
+    const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const ago = (s) => s == null ? '' : s < 5 ? 'just now' : s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+
     async function refreshTerminals() {
       try {
-        const response = await fetch(`${BRIDGE_URL}/terminals`);
-        const data = await response.json();
-        const sessions = data.sessions || [];
+        const [st, tl] = await Promise.all([
+          fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()),
+          fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).catch(() => ({ sessions: [] })),
+        ]);
+        const tails = Object.fromEntries((tl.sessions || []).map((s) => [s.sid, s.bufferTail]));
+        const agents = st.agents || [];
 
-        // Remove terminals that no longer exist
-        for (const [sid, _] of terminals) {
-          if (!sessions.find(s => s.sid === sid)) {
-            const panel = document.querySelector(`[data-sid="${sid}"]`);
-            if (panel) panel.remove();
-            terminals.delete(sid);
-          }
+        if (!agents.length) {
+          terminalsContainer.innerHTML = `<div class="empty-state"><div>${st.error ? esc(st.error) : 'No agents running'}</div></div>`;
+          return;
         }
 
-        // Add/update terminal panels (read-only tails; attaching a WebSocket would
-        // evict the same session's panel in the 3001 cockpit)
-        for (const session of sessions) {
-          if (!terminals.has(session.sid)) {
-            createTerminalPanel(session);
-          }
-          const body = terminals.get(session.sid).body;
-          const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
-          // Drop the TUI's rule lines / blank runs so the panel shows content, not chrome.
-          body.textContent = session.bufferTail.split('\n')
-            .filter(l => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l))
-            .slice(-40).join('\n');
-          if (atBottom) body.scrollTop = body.scrollHeight;
-        }
-
-        // Show empty state if no terminals
-        if (sessions.length === 0 && terminals.size === 0) {
-          terminalsContainer.innerHTML = `
-            <div class="empty-state">
-              <div>No terminals running</div>
-              <div style="font-size: 12px; margin-top: 8px; opacity: 0.6;">Waiting for agents to start...</div>
+        terminalsContainer.innerHTML = agents.map((a) => {
+          const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
+          const open = expanded.has(a.sid);
+          const raw = (tails[a.sid] || '').split('\n').filter((l) => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l)).slice(-30).join('\n');
+          return `<div class="agent-card" data-sid="${esc(a.sid)}">
+            <div class="agent-top">
+              <span class="dot" style="background:${color}"></span>
+              <b>${esc(a.label)}</b>
+              <span class="pill" style="color:${color};border-color:${color}">${name}</span>
+              <span class="muted">${ago(a.secondsSinceActivity)}</span>
             </div>
-          `;
-        }
+            ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: it is stopped at a permission prompt${a.prompt ? ` (${esc(a.prompt)})` : ''}. Tell the orchestrator to approve or deny it.</div>` : ''}
+            ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself whenever it goes idle, so it may flicker between idle and working.</div>` : ''}
+            ${a.doing ? `<div class="row"><span>Last said</span>${esc(a.doing)}</div>` : ''}
+            ${a.lastAsked ? `<div class="row"><span>Last asked</span>${esc(a.lastAsked)}</div>` : ''}
+            <div class="muted small">terminal ${esc(a.sid.slice(0, 8))} · ${open ? 'hide' : 'show'} raw screen</div>
+            ${open ? `<pre class="raw">${esc(raw) || '(nothing readable)'}</pre>` : ''}
+          </div>`;
+        }).join('');
       } catch (error) {
-        console.error('Error refreshing terminals:', error);
+        console.error('Error refreshing agents:', error);
       }
     }
 
-    // Create a terminal panel for a session
-    function createTerminalPanel(session) {
-      const panel = document.createElement('div');
-      panel.className = 'terminal-panel';
-      panel.setAttribute('data-sid', session.sid);
-
-      const header = document.createElement('div');
-      header.className = 'terminal-header';
-      header.innerHTML = `
-        <div class="terminal-label">${session.label || session.agent || session.sid.slice(0, 8)}</div>
-        <div class="terminal-status">${session.sid.slice(0, 8)}</div>
-      `;
-
-      const body = document.createElement('div');
-      body.className = 'terminal-body';
-
-      panel.appendChild(header);
-      panel.appendChild(body);
-
-      // Remove empty state
-      const emptyState = terminalsContainer.querySelector('.empty-state');
-      if (emptyState) emptyState.remove();
-
-      terminalsContainer.appendChild(panel);
-
-      terminals.set(session.sid, { body });
-    }
+    terminalsContainer.addEventListener('click', (e) => {
+      const card = e.target.closest('.agent-card');
+      if (!card) return;
+      const sid = card.dataset.sid;
+      expanded.has(sid) ? expanded.delete(sid) : expanded.add(sid);
+      refreshTerminals();
+    });
 
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
+    stopBtn.addEventListener('click', () => fetch(`${ORCHESTRATOR_URL}/stop`, { method: 'POST' }));
 
     // Voice input: browser speech recognition fills the box and sends when you pause.
     const micBtn = document.getElementById('micBtn');
@@ -547,7 +558,7 @@
 
     // Initial terminal refresh
     refreshTerminals();
-    setInterval(refreshTerminals, 2000); // Poll every 2 seconds for new terminals
+    setInterval(refreshTerminals, 3000);
   </script>
 </body>
 </html>
