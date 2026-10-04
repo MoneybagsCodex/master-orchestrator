@@ -278,6 +278,7 @@
     .note { color: #94a3b8; font-size: 12px; margin: 4px 0; }
     .raw { background: #0a0e27; border-radius: 6px; padding: 8px; margin-top: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
 
+    .sys-note { align-self: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #312e81; padding-top: 6px; margin-top: 4px; }
     .steps {
       font-size: 11px;
       color: #64748b;
@@ -523,6 +524,7 @@
     });
 
     // Restore the conversation after a refresh: the orchestrator's session persists server-side.
+    let lastHistoryCount = 0;
     async function restoreHistory() {
       try {
         const { messages, busy } = await fetch(`${ORCHESTRATOR_URL}/history`).then((r) => r.json());
@@ -531,9 +533,12 @@
         if (busy && inflight === 0) { stopBtn.style.display = 'inline-block'; setTimeout(restoreHistory, 3000); }
         else if (inflight === 0) stopBtn.style.display = 'none';
         if (inflight > 0 || !messages || !messages.length) return;
+        if (messages.length === lastHistoryCount) return;   // nothing new: don't redraw
+        lastHistoryCount = messages.length;
         messagesContainer.innerHTML = '';
         for (const m of messages) {
           if (m.role === 'user') { addMessage('user', m.text); continue; }
+          if (m.role === 'system') { const n = document.createElement('div'); n.className = 'sys-note'; n.textContent = '↩ ' + m.text; messagesContainer.appendChild(n); continue; }
           const div = addMessage('assistant', '');
           const steps = document.createElement('div');
           steps.className = 'steps';
@@ -546,6 +551,8 @@
       } catch (e) { /* no history yet */ }
     }
     restoreHistory();
+    // Replies the orchestrator sends on its own (an agent finished something you delegated) appear without a reload.
+    setInterval(() => { if (inflight === 0) restoreHistory(); }, 5000);
 
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
