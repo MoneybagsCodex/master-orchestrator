@@ -329,6 +329,8 @@
     .tok { font-size: 10.5px; color: #94a3b8; margin: 3px 0 0; display: flex; flex-wrap: wrap; gap: 2px 10px; }
     .tok .ctx.hot { color: #fbbf24; font-weight: 600; } .tok .ctx.hot b { color: #fbbf24; }
     .thresh { font-size: 11px; color: #94a3b8; margin: 4px 0; } .thresh select { background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 4px; font-size: 11px; }
+    .errs { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #f87171; background: #2a1215; border-radius: 4px; font-size: 10.5px; color: #fecaca; }
+    .errs b { color: #fca5a5; } .errs div { white-space: normal; word-break: break-word; }
     .tok b { color: #cbd5e1; font-weight: 600; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
@@ -733,10 +735,14 @@
     const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
     let ctxThreshold = 150000;
     try { const v = Number(localStorage.getItem('ctxThreshold')); if (v >= 10000) ctxThreshold = v; } catch { /* storage unavailable */ }
+    function errBlock(a) {
+      const e = a.recentErrors || []; if (!e.length) return '';
+      return `<div class="errs" title="Taken verbatim from the agent's transcript, not summarized"><b>Recent tool errors</b>${e.map((x) => `<div>${esc(x.text)}</div>`).join('')}</div>`;
+    }
     function tokLine(a) {
       const t = a.tokens; if (!t || !t.messages) return '';
       return `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
-        ${t.context ? `<span class="ctx ${t.context > ctxThreshold ? 'hot' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)">${t.context > ctxThreshold ? '⚠ ' : ''}context <b>${fmtTok(t.context)}</b>${t.context > ctxThreshold ? ` &gt; ${fmtTok(ctxThreshold)}: consider compacting` : ''}</span>` : ''}<span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
+        ${t.compactedAt && !t.context ? `<span class="ctx" title="The conversation was just compacted; the new size appears after the agent's next reply">✓ compacted ${ago(Math.max(0, Date.now() / 1000 - t.compactedAt))}, new size after its next reply</span>` : ''}${t.context ? `<span class="ctx ${t.context > ctxThreshold ? 'hot' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)">${t.context > ctxThreshold ? '⚠ ' : ''}context <b>${fmtTok(t.context)}</b>${t.context > ctxThreshold ? ` &gt; ${fmtTok(ctxThreshold)}: consider compacting` : ''}</span>` : ''}<span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
         <span>total <b>${fmtTok(t.total)}</b></span><span><b>${fmtTok(t.perHour)}</b>/hr</span>${a.state === 'WORKING' ? `<span>this turn <b>${fmtTok(t.turnTotal)}</b></span>` : ''}</div>`;
     }
 
@@ -782,6 +788,7 @@
         ${working}
         ${actBar(a)}
         ${tokLine(a)}
+        ${errBlock(a)}
         ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
         ${standBlock(a, open)}
         ${open ? `
