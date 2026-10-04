@@ -303,6 +303,29 @@
     .wk.fin.pending { color: #64748b; }
     .wk.pending { color: #64748b; font-style: italic; }
     .latest { font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .act { margin: 4px 0 2px; }
+    .act .lbl { font-size: 10.5px; color: #9ca3af; display: flex; justify-content: space-between; gap: 6px; }
+    .act .lbl b { font-weight: 600; }
+    .act .trk { height: 4px; border-radius: 2px; background: #1f2937; overflow: hidden; position: relative; margin-top: 2px; }
+    .act .trk i { position: absolute; top: 0; bottom: 0; width: 38%; border-radius: 2px; animation: actslide 1.4s ease-in-out infinite; }
+    .act.thinking .trk i { background: #a78bfa; animation-duration: 2.2s; }
+    .act.tool .trk i { background: #fbbf24; }
+    .act.writing .trk i { background: #34d399; animation-duration: 1.8s; }
+    .act.thinking .lbl b { color: #a78bfa; } .act.tool .lbl b { color: #fbbf24; } .act.writing .lbl b { color: #34d399; }
+    @keyframes actslide { 0% { left: -40%; } 100% { left: 102%; } }
+    .plan { border: 1px solid #312e81; border-radius: 8px; padding: 8px 10px; margin: 8px 0; background: #0f172a; }
+    .plan-h { font-size: 11px; font-weight: 600; color: #c7d2fe; display: flex; justify-content: space-between; cursor: pointer; }
+    .plan-h .muted { font-weight: 400; }
+    .plan svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+    .plan .pn rect { fill: #111827; stroke-width: 1.5; }
+    .plan .pn text { fill: #e5e7eb; font-size: 10px; }
+    .plan .pn.todo rect { stroke: #475569; } .plan .pn.active rect { stroke: #fbbf24; } .plan .pn.done rect { stroke: #34d399; fill: #052e2b; }
+    .plan .pn.blocked rect { stroke: #f87171; } .plan .pn.decide rect { stroke: #f59e0b; fill: #3a2a05; stroke-dasharray: 4 2; }
+    .plan .pn.active rect { animation: planpulse 1.6s ease-in-out infinite; }
+    @keyframes planpulse { 50% { stroke-opacity: .35; } }
+    .plan .pe { fill: none; stroke: #475569; stroke-width: 1.2; }
+    .plan .pn .tag { font-size: 8.5px; fill: #9ca3af; }
+    .plan .pdec { margin-top: 6px; font-size: 11px; color: #fcd34d; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
     .stand { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
@@ -703,6 +726,15 @@
       return `<div class="ar">${ask}${reply ? `<div class="r">↳ ${esc(String(reply).slice(0, 200))}</div>` : ''}</div>`;
     }
 
+    function actBar(a) {
+      const x = a.activity;
+      if (!x || a.state !== 'WORKING') return '';
+      const label = x.phase === 'tool' ? `running ${esc(x.tool || 'a tool')}` : x.phase === 'writing' ? 'writing a reply' : 'thinking';
+      const secs = x.turnStart ? Math.max(0, Math.round(Date.now() / 1000 - x.turnStart)) : 0;
+      const t = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+      return `<div class="act ${x.phase}"><div class="lbl"><b>${label}</b><span>${x.steps} step${x.steps === 1 ? '' : 's'} · ${t}</span></div><div class="trk"><i></i></div></div>`;
+    }
+
     function agentCard(a) {
       const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
       const open = expanded.has(a.sid);
@@ -728,6 +760,7 @@
         <div class="row1"><span class="dot" style="background:${color}"></span><b class="ttl">${esc(a.topic || a.label)}</b>
           <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
         ${working}
+        ${actBar(a)}
         ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
         ${standBlock(a, open)}
         ${open ? `
@@ -747,6 +780,39 @@
         <div class="need ${n.kind}"><div><b>${esc(n.title)}</b><div class="detail">${esc(n.detail)}</div></div>
         <div class="need-actions">${n.actions.includes('approve') ? `<button class="ok" data-decide="approve" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Approve</button>` : ''}
         ${n.actions.includes('deny') ? `<button class="no" data-decide="deny" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Deny</button>` : ''}</div></div>`).join('')}</div>`;
+    }
+
+    let planData = null, planOpen = true;
+    function planPanel(agents) {
+      const pl = planData; if (!pl || !pl.nodes || !pl.nodes.length) return '';
+      // A node tied to an agent follows that agent's real state, so the graph never claims more than the agents report.
+      const live = (n) => {
+        const a = n.sid && agents.find((x) => x.sid.startsWith(n.sid));
+        if (a && n.status !== 'done' && n.status !== 'decide') { if (a.state === 'BLOCKED') return 'blocked'; if (a.state === 'WORKING') return 'active'; }
+        return n.status;
+      };
+      const nodes = pl.nodes.map((n) => ({ ...n, st: live(n) }));
+      const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+      const depth = (n, seen = new Set()) => { if (n.d !== undefined) return n.d; if (seen.has(n.id)) return 0; seen.add(n.id); return (n.d = n.deps.length ? 1 + Math.max(...n.deps.map((d) => byId[d] ? depth(byId[d], seen) : -1)) : 0); };
+      nodes.forEach((n) => depth(n));
+      const cols = []; nodes.forEach((n) => (cols[n.d] = cols[n.d] || []).push(n));
+      const W = 128, H = 38, GX = 26, GY = 12, PAD = 6;
+      const rows = Math.max(...cols.map((c) => c.length));
+      const width = cols.length * W + (cols.length - 1) * GX + PAD * 2, height = rows * H + (rows - 1) * GY + PAD * 2;
+      cols.forEach((c, ci) => c.forEach((n, ri) => { n.x = PAD + ci * (W + GX); n.y = PAD + ri * (H + GY) + ((rows - c.length) * (H + GY)) / 2; }));
+      const edges = nodes.flatMap((n) => n.deps.filter((d) => byId[d]).map((d) => { const a = byId[d];
+        const x1 = a.x + W, y1 = a.y + H / 2, x2 = n.x, y2 = n.y + H / 2, mx = (x1 + x2) / 2;
+        return `<path class="pe" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr)"/>`; }));
+      const clip = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
+      const boxes = nodes.map((n) => {
+        const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
+        const l1 = clip(mark + n.title, 22), l2 = n.title.length > 22 ? clip(n.title.slice(21), 24) : '';
+        return `<g class="pn ${n.st}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.st}]</title><rect width="${W}" height="${H}" rx="6"/>
+          <text x="7" y="${l2 ? 15 : 22}">${esc(l1)}</text>${l2 ? `<text x="7" y="27">${esc(l2)}</text>` : ''}</g>`; }).join('');
+      const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide');
+      return `<div class="plan"><div class="plan-h" data-toggle-plan><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${planOpen ? '▾' : '▸'}</span></div>
+        ${planOpen ? `<svg viewBox="0 0 ${width} ${height}"><defs><marker id="arr" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${edges.join('')}${boxes}</svg>
+        ${decide.map((n) => `<div class="pdec">❓ To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</div>`).join('')}` : ''}</div>`;
     }
 
     function summaryStrip(st) {
@@ -816,14 +882,14 @@
 
     async function refreshTerminals() {
       try {
-        const st = await fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json());
-        lastStatus = st;
+        const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plan`).then((r) => r.json()).catch(() => ({}))]);
+        lastStatus = st; planData = pj.plan || null;
         const agents = st.agents || [];
         if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
         const typing = document.activeElement && document.activeElement.id === 'standingInput';
         if (typing) return;
-        terminalsContainer.innerHTML = needsLane(st.needsYou || []) + summaryStrip(st)
+        terminalsContainer.innerHTML = needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
           + (agents.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         for (const sid of rawOpen) {
           const pre = terminalsContainer.querySelector(`[data-raw="${sid}"]`);
@@ -885,6 +951,7 @@
         await post('/standing', { text }); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return;
       }
       if (btn && btn.id === 'enableAlerts') { Notification.requestPermission().then((p) => toast(p === 'granted' ? 'Desktop alerts on' : 'Desktop alerts blocked by the browser', 'info')); return; }
+      if (e.target.closest('[data-toggle-plan]')) { planOpen = !planOpen; refreshTerminals(); return; }
       if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
       if (btn || e.target.closest('input')) return;
       const card = e.target.closest('.agent-card'); if (!card) return;
