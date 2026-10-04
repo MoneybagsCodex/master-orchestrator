@@ -298,6 +298,9 @@
     .mini button { width: 22px; height: 20px; padding: 0; font-size: 11px; background: #1e293b; color: #cbd5e1; border: 1px solid #312e81; border-radius: 4px; cursor: pointer; }
     .mini button:hover { border-color: #6366f1; color: #fff; }
     .wk { font-size: 12px; color: #e2e8f0; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wk.need { color: #fcd34d; font-weight: 600; }
+    .wk.fin { color: #6ee7b7; }
+    .wk.fin.pending { color: #64748b; }
     .wk.pending { color: #64748b; font-style: italic; }
     .latest { font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -588,10 +591,16 @@
       const turns = (a.turns || []).slice(-4);
       const real = [...turns].reverse().find((t) => !t.loop && t.asked);
       const latest = turns[turns.length - 1];
-      // "Working on" is a model-written goal; until it is ready show the literal request, clearly muted.
-      const working = a.headline
-        ? `<div class="wk">Working on: ${esc(a.headline)}</div>`
-        : (real ? `<div class="wk pending">${esc(real.asked.slice(0, 80))}…</div>` : '');
+      // Working: the goal. Finished (idle, and not a goal-loop agent that restarts itself): what it accomplished.
+      // Both are model-written summaries; until one is ready show the literal text, muted.
+      const idleNotLoop = a.state === 'IDLE' && !a.hasGoalLoop;
+      const finished = idleNotLoop && (a.outcome || a.lastSaid);
+      let working = '';
+      if (a.state === 'BLOCKED') working = `<div class="wk need">⚠ Waiting For You: ${esc(a.prompt ? 'a permission prompt, ' + a.prompt.slice(0, 70) : 'a permission prompt (approve or deny)')}</div>`;
+      else if (idleNotLoop && a.asking) working = `<div class="wk need">❓ Waiting For You: ${esc(a.asking.slice(0, 110))}</div>`;
+      else if (finished) working = a.outcome ? `<div class="wk fin">✓ Finished: ${esc(a.outcome)}</div>` : `<div class="wk fin pending">✓ Finished: ${esc(a.lastSaid.slice(0, 80))}…</div>`;
+      else if (a.headline) working = `<div class="wk">Working on: ${esc(a.headline)}</div>`;
+      else if (real) working = `<div class="wk pending">${esc(real.asked.slice(0, 80))}…</div>`;
       const mini = `<span class="mini"><button data-act="compact" data-sid="${esc(a.sid)}" title="Compact its context">⇣</button><button data-act="retest" data-sid="${esc(a.sid)}" title="Ask it to re-run its tests">↻</button><button data-act="stop" data-sid="${esc(a.sid)}" title="Interrupt what it is doing">■</button></span>`;
       const msgs = (a.messages || []).map((m) => { const [ic, lb, cls] = MSG_STATE[m.state] || ['•', m.state, '']; return `<div class="task ${cls}"><span>${ic}</span><em>${lb}</em> ${esc(m.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - m.sentAt))}</i></div>`; });
       const tasks = (a.tasks || []).map((t) => { const [ic, lb] = TASK_LABEL[t.status] || ['•', t.status]; return `<div class="task ${t.status}"><span>${ic}</span><em>${lb}</em> ${esc(t.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - t.sentAt))}</i></div>`; });
@@ -601,7 +610,6 @@
         <div class="row1"><span class="dot" style="background:${color}"></span><b class="ttl">${esc(a.topic || a.label)}</b>
           <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
         ${working}
-        ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: permission prompt${a.prompt ? ` (${esc(a.prompt.slice(0, 80))})` : ''}.</div>` : ''}
         ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
         ${!open && oneLine ? `<div class="latest">${oneLine}</div>` : ''}
         ${open ? `
