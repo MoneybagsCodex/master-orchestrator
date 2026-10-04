@@ -102,6 +102,35 @@
       --text: #f8f8f2; --text-2: #cfd0e0; --text-3: #9ea2c4; --idle-line: #6272a4;
       --accent: #bd93f9; --accent-strong: #7b4fd1; --success: #50fa7b; --warning: #f1fa8c; --danger: #ff6e6e; --info: #8be9fd;
     }
+
+    /* ================= Velocity & workload: burndown + swimlanes ================= */
+    .viz-sec { margin-top: 10px; } .viz-sec h4 { font-size: var(--fs-xs); font-weight: 650; color: var(--text-2); text-transform: uppercase; letter-spacing: .06em; display: flex; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+    .viz-sec h4 span { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--text-3); }
+    .viz svg { width: 100%; height: auto; display: block; margin-top: 2px; }
+    .viz text { font-family: var(--font); font-size: 9px; fill: var(--text-3); }
+    .viz .ax { stroke: var(--line-strong); stroke-width: 1; } .viz .grid { stroke: var(--line); stroke-width: 1; }
+    .viz .scope { fill: none; stroke: var(--text-3); stroke-width: 1.4; stroke-dasharray: 4 3; }
+    .viz .doneL { fill: none; stroke: var(--success); stroke-width: 2; stroke-linejoin: round; }
+    .viz .doneA { fill: color-mix(in srgb, var(--success) 16%, transparent); stroke: none; }
+    .viz .remA { fill: color-mix(in srgb, var(--warning) 9%, transparent); stroke: none; }
+    .viz .nowL { stroke: var(--accent); stroke-width: 1; stroke-dasharray: 2 3; opacity: .7; }
+    .viz .lane-bg { fill: var(--surface-inset); opacity: .55; } .viz .lane-l { fill: var(--text-2); font-size: 9.5px; font-weight: 600; }
+    .viz .vb { stroke-width: 1.2; } .viz .bar-t { fill: var(--text); font-size: 8.5px; font-weight: 550; pointer-events: none; }
+    .viz .vb.done { fill: color-mix(in srgb, var(--success) 22%, var(--surface-2)); stroke: var(--success); }
+    .viz .vb.active { fill: color-mix(in srgb, var(--info) 22%, var(--surface-2)); stroke: var(--info); }
+    .viz .vb.blocked { fill: color-mix(in srgb, var(--danger) 24%, var(--surface-2)); stroke: var(--danger); }
+    .viz .vb.decide { fill: color-mix(in srgb, var(--warning) 20%, var(--surface-2)); stroke: var(--warning); stroke-dasharray: 4 2; }
+    .viz .vb.todo { fill: none; stroke: var(--idle-line); stroke-dasharray: 3 3; }
+    .viz .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); margin-top: 6px; }
+    .viz .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; border: 1.5px solid var(--c); background: color-mix(in srgb, var(--c) 25%, transparent); }
+    .viz .empty { font-size: var(--fs-sm); color: var(--text-3); padding: 6px 0; }
+    :root[data-theme="orange"] {
+      --bg: #260f02; --surface-1: #3a1805; --surface-2: #4a2007; --surface-3: #5e2b0b; --surface-inset: #200c01;
+      --line: rgba(255, 190, 120, .14); --line-strong: rgba(255, 190, 120, .28); --wash: 255, 200, 140;
+      --text: #fff3e8; --text-2: #f3d3b6; --text-3: #d8a67e; --idle-line: #9a6540;
+      --accent: #ff8a1f; --accent-strong: #b84808; --success: #7ee08a; --warning: #ffd24d; --danger: #ff7c8c; --info: #5ccbff;
+      --danger-text: #ffd9d2;
+    }
     .theme-picker { margin-left: auto; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -548,6 +577,7 @@
           <option value="slate">Slate</option>
           <option value="ocean">Ocean</option>
           <option value="sunset">Sunset</option>
+          <option value="orange">Orange</option>
           <option value="forest">Forest</option>
           <option value="midnight">Midnight</option>
           <option value="nord">Nord</option>
@@ -572,7 +602,7 @@
     const modelPicker = document.getElementById('modelPicker');
     const themePicker = document.getElementById('themePicker');
     { // theme: the <head> script applied the saved choice before paint; this keeps the dropdown in sync and saves changes
-      const THEMES = ['dark', 'light', 'slate', 'ocean', 'sunset', 'forest', 'midnight', 'nord', 'dracula'];
+      const THEMES = ['dark', 'light', 'slate', 'ocean', 'sunset', 'orange', 'forest', 'midnight', 'nord', 'dracula'];
       let saved = 'dark';
       try { const t = localStorage.getItem('theme'); if (THEMES.includes(t)) saved = t; } catch { /* storage unavailable */ }
       document.documentElement.setAttribute('data-theme', saved);
@@ -924,6 +954,105 @@
         ${n.actions.includes('deny') ? `<button class="no" data-decide="deny" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Deny</button>` : ''}</div></div>`).join('')}</div>`;
     }
 
+    // ---------- Velocity & workload: burndown and swimlanes, both computed from the plan steps' own timestamps ----------
+    // A step's timestamps: createdAt (when it joined the plan; older steps fall back to startedAt), startedAt, doneAt.
+    const stepTimes = (n) => ({ c: n.createdAt || n.startedAt || n.doneAt || n.statusAt || null, s: n.startedAt || null, d: n.status === 'done' ? (n.doneAt || n.statusAt || null) : null });
+    function burndownModel(nodes, now) {
+      const T = nodes.map((n) => ({ n, ...stepTimes(n) }));
+      const known = T.flatMap((x) => [x.c, x.s, x.d]).filter(Boolean);
+      if (!T.length || !known.length) return null;
+      const t0 = Math.min(...known);
+      const created = T.map((x) => Math.max(t0, x.c || t0)), finished = T.filter((x) => x.d).map((x, i) => Math.max(t0, x.d, x.c || 0)).sort((a, b) => a - b);
+      const scopeAt = created.slice().sort((a, b) => a - b);
+      const pts = [...new Set([t0, ...scopeAt, ...finished, now])].sort((a, b) => a - b);
+      const cnt = (arr, t) => arr.filter((v) => v <= t).length;
+      const series = pts.map((t) => ({ t, scope: cnt(scopeAt, t), done: cnt(finished, t) }));
+      const total = T.length, done = finished.length, hour = now - 3600;
+      const recent = finished.filter((t) => t >= hour).length, span = Math.max(now - Math.max(t0, hour), 600);
+      const perHour = recent / (span / 3600);
+      return { t0, now, series, total, done, remaining: total - done, perHour, etaMin: perHour > 0 && total > done ? Math.round(((total - done) / perHour) * 60) : null };
+    }
+    function laneModel(nodes, agents, now) {
+      const lanes = new Map();
+      const laneOf = (n) => {
+        if (n.worker) return ['w:' + n.worker, 'Subagent: ' + n.worker];
+        const a = n.sid && agents.find((x) => x.sid.startsWith(n.sid));
+        if (a) return ['a:' + a.sid, a.topic || a.label || a.sid.slice(0, 8)];
+        return ['none', n.sid ? 'Agent ' + n.sid : 'Unassigned'];
+      };
+      const live = (n) => { const a = n.sid && agents.find((x) => x.sid.startsWith(n.sid)); if (a && !['done', 'decide', 'blocked'].includes(n.status)) { if (a.state === 'BLOCKED') return 'blocked'; if (a.state === 'WORKING') return 'active'; } return n.status; };
+      for (const n of nodes) {
+        const [k, label] = laneOf(n); if (!lanes.has(k)) lanes.set(k, { key: k, label, steps: [] });
+        const tm = stepTimes(n), st = live(n);
+        let start = n.startedAt || (st === 'done' ? null : tm.c), end = st === 'done' ? (tm.d || now) : st === 'todo' ? null : now;
+        if (st === 'done' && !start) start = (tm.d || now) - 120;          // finished with no recorded start: show a short marker ending at completion
+        lanes.get(k).steps.push({ id: n.id, title: n.title, status: st, step: n.step, start: st === 'todo' ? now : (start || now), end: end, queued: st === 'todo' || st === 'decide' && !n.startedAt });
+      }
+      const all = [...lanes.values()];
+      // Steps that overlap in time go on separate sub-rows inside their lane so no bar hides another.
+      all.forEach((l) => { l.steps.sort((a, b) => a.start - b.start); const ends = []; l.steps.forEach((x) => { const e = x.end || x.start + 900; let r = ends.findIndex((v) => v <= x.start); if (r < 0) { r = ends.length; ends.push(0); } ends[r] = e + 60; x.row = r; }); l.rows = Math.max(1, ends.length); });
+      all.forEach((l) => { l.steps.sort((a, b) => a.start - b.start); l.open = l.steps.filter((x) => x.status !== 'done').length; l.done = l.steps.length - l.open; });
+      all.sort((a, b) => b.open - a.open || a.label.localeCompare(b.label));
+      const t0 = Math.min(now - 600, ...all.flatMap((l) => l.steps.map((x) => x.start)));
+      return { lanes: all, t0, now };
+    }
+    const fmtAgo = (sec) => { const m = Math.round(sec / 60); return m >= 60 ? `${(m / 60).toFixed(m % 60 ? 1 : 0)}h` : `${m}m`; };
+    function burndownSvg(m) {
+      const W = 560, H = 132, L = 30, R = 12, Tp = 10, B = 22, pw = W - L - R, ph = H - Tp - B;
+      const span = Math.max(m.now - m.t0, 600), X = (t) => L + ((t - m.t0) / span) * pw, ymax = Math.max(m.total, 1), Y = (v) => Tp + ph - (v / ymax) * ph;
+      const pts = (key) => m.series.flatMap((p, i, a) => (i ? [[X(p.t), Y(a[i - 1][key])], [X(p.t), Y(p[key])]] : [[X(p.t), Y(p[key])]]));
+      const line = (ps) => ps.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('');
+      const step = (key) => line(pts(key));
+      const closed = (key, base) => { const ps = pts(key); return `${line(ps)}L${ps[ps.length - 1][0].toFixed(1)} ${Y(base)}L${ps[0][0].toFixed(1)} ${Y(base)}Z`; };
+      const between = `${line(pts('scope'))}${pts('done').reverse().map((q) => `L${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('')}Z`;
+      const ticks = []; for (let v = 0; v <= ymax; v += Math.max(1, Math.ceil(ymax / 4))) ticks.push(v);
+      const xt = [0, .33, .66, 1].map((f) => m.t0 + span * f);
+      const last = m.series[m.series.length - 1];
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Burndown: ${m.done} of ${m.total} steps done">
+        ${ticks.map((v) => `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 5}" y="${Y(v) + 3}" text-anchor="end">${v}</text>`).join('')}
+        <path class="remA" d="${between}"/>
+        <path class="doneA" d="${closed('done', 0)}"/>
+        <path class="scope" d="${step('scope')}"/><path class="doneL" d="${step('done')}"/>
+        <line class="ax" x1="${L}" x2="${W - R}" y1="${Y(0)}" y2="${Y(0)}"/>
+        ${xt.map((t, i) => `<text x="${X(t)}" y="${H - 7}" text-anchor="${i === 0 ? 'start' : i === 3 ? 'end' : 'middle'}">${i === 3 ? 'now' : '-' + fmtAgo(m.now - t)}</text>`).join('')}
+        <circle cx="${X(last.t)}" cy="${Y(last.done)}" r="3" fill="var(--success)"/>
+        <title>${m.done} done of ${m.total} steps</title></svg>`;
+    }
+    function lanesSvg(m) {
+      const W = 560, LBL = 112, R = 10, LH = 22, G = 4, Tp = 4, B = 18, pw = W - LBL - R, H = Tp + m.lanes.reduce((t, l) => t + l.rows * LH + G, 0) + B;
+      const horizon = m.now + Math.max(300, (m.now - m.t0) * 0.08), span = horizon - m.t0, X = (t) => LBL + ((t - m.t0) / span) * pw;
+      const clip = (txt, px) => { const max = Math.max(0, Math.floor(px / 4.9)); return txt.length <= max ? txt : max > 3 ? txt.slice(0, max - 1) + '…' : ''; };
+      let yAcc = Tp;
+      const rows = m.lanes.map((l) => {
+        const y = yAcc, laneH = l.rows * LH; yAcc += laneH + G;
+        const bars = l.steps.map((s) => {
+          const x1 = X(s.start), x2 = s.end ? X(s.end) : X(m.now) + 26, w = Math.max(7, x2 - x1);
+          const label = (s.step ? 'S' + s.step + ' ' : '') + s.title;
+          return `<g><rect class="vb ${esc(s.status)}" x="${x1.toFixed(1)}" y="${y + s.row * LH + 2}" width="${w.toFixed(1)}" height="${LH - 4}" rx="4"/><text class="bar-t" x="${(x1 + 5).toFixed(1)}" y="${y + s.row * LH + LH / 2 + 3}">${esc(clip(label, w - 8))}</text><title>${esc(label)} (${esc(s.status)}${s.end ? ', ' + fmtAgo(s.end - s.start) : ''})</title></g>`;
+        }).join('');
+        return `<rect class="lane-bg" x="${LBL - 4}" y="${y}" width="${pw + 4 + R - 6}" height="${laneH}" rx="5"/><text class="lane-l" x="0" y="${y + LH / 2 + 3}">${esc(clip(l.label, LBL - 10))}</text>${bars}`;
+      }).join('');
+      const xt = [0, .5, 1].map((f) => m.t0 + (m.now - m.t0) * f);
+      return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Swimlanes: ${m.lanes.length} lanes">${rows}
+        <line class="nowL" x1="${X(m.now)}" x2="${X(m.now)}" y1="0" y2="${H - B}"/>
+        ${xt.map((t, i) => `<text x="${X(t)}" y="${H - 5}" text-anchor="${i === 0 ? 'start' : i === 2 ? 'middle' : 'middle'}">${i === 2 ? 'now' : '-' + fmtAgo(m.now - t)}</text>`).join('')}</svg>`;
+    }
+    let vizClosed = false;
+    function vizPanel(agents) {
+      const nodes = plansData.flatMap((p) => p.nodes || []);
+      if (!nodes.length) return '';
+      const now = Date.now() / 1000, bm = burndownModel(nodes, now), lm = laneModel(nodes, agents, now);
+      const head = `<div class="plan-h" data-toggle-viz><span>Velocity &amp; workload</span><span class="muted">${bm ? `${bm.done}/${bm.total} done` : ''} <svg class="i" aria-hidden="true"><use href="#i-${vizClosed ? 'right' : 'down'}"/></svg></span></div>`;
+      if (vizClosed) return `<div class="plan viz" data-k="viz">${head}</div>`;
+      const vel = bm ? `${bm.perHour >= 0.05 ? bm.perHour.toFixed(1) : '0'} steps/hr over the last hour${bm.etaMin !== null ? `, about ${fmtAgo(bm.etaMin * 60)} to finish what is left at this pace` : ''}` : '';
+      return `<div class="plan viz" data-k="viz">${head}
+        <div class="viz-sec"><h4>Burndown <span>${bm ? `${bm.remaining} remaining · ${esc(vel)}` : ''}</span></h4>${bm ? burndownSvg(bm) : '<div class="empty">No step timestamps yet.</div>'}
+          <div class="legend"><span style="--c:var(--success)"><i></i>done (cumulative)</span><span style="--c:var(--text-3)"><i></i>total scope</span><span style="--c:var(--warning)"><i></i>remaining</span></div></div>
+        <div class="viz-sec"><h4>Swimlanes <span>${lm.lanes.length} lane${lm.lanes.length === 1 ? '' : 's'} · hover a bar for its full title</span></h4>${lanesSvg(lm)}
+          <div class="legend"><span style="--c:var(--success)"><i></i>done</span><span style="--c:var(--info)"><i></i>active</span><span style="--c:var(--danger)"><i></i>blocked</span><span style="--c:var(--warning)"><i></i>needs decision</span><span style="--c:var(--idle-line)"><i></i>queued</span></div></div></div>`;
+    }
+    window.__viz = { burndownModel, laneModel };   // exposed so the models can be tested with synthetic data
+
     // One plan per domain (game / orchestrator / UI). planData.nodes is every step across plans, for the per-agent helpers above;
     // plansData is the list of plans, each drawn as its own graph with its own open/closed state.
     let planData = null, plansData = [], planClosed = new Set(), prevPlan = {};
@@ -1070,7 +1199,7 @@
         if (typing) return;
         const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
         const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
+        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
           + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         paintDiff(terminalsContainer);
         for (const sid of rawOpen) {
@@ -1139,6 +1268,7 @@
         await post('/standing', { text }); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return;
       }
       if (btn && btn.id === 'enableAlerts') { Notification.requestPermission().then((p) => toast(p === 'granted' ? 'Desktop alerts on' : 'Desktop alerts blocked by the browser', 'info')); return; }
+      { if (e.target.closest('[data-toggle-viz]')) { vizClosed = !vizClosed; refreshTerminals(); return; } }
       { const tp = e.target.closest('[data-toggle-plan]'); if (tp) { const id = tp.dataset.togglePlan; if (planClosed.has(id)) planClosed.delete(id); else planClosed.add(id); refreshTerminals(); return; } }
       if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
       if (btn || e.target.closest('input')) return;
