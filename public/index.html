@@ -844,9 +844,13 @@
         ${n.actions.includes('deny') ? `<button class="no" data-decide="deny" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Deny</button>` : ''}</div></div>`).join('')}</div>`;
     }
 
-    let planData = null, planOpen = true, prevPlan = {};
-    function planPanel(agents) {
-      const pl = planData; if (!pl || !pl.nodes || !pl.nodes.length) return '';
+    // One plan per domain (game / orchestrator / UI). planData.nodes is every step across plans, for the per-agent helpers above;
+    // plansData is the list of plans, each drawn as its own graph with its own open/closed state.
+    let planData = null, plansData = [], planClosed = new Set(), prevPlan = {};
+    function planPanel(agents) { return plansData.map((p) => planPanelOne(agents, p)).join(''); }
+    function planPanelOne(agents, pl) {
+      if (!pl || !pl.nodes || !pl.nodes.length) return '';
+      const planOpen = !planClosed.has(pl.id);
       // A node tied to an agent follows that agent's real state, so the graph never claims more than the agents report.
       const live = (n) => {
         const a = n.sid && agents.find((x) => x.sid.startsWith(n.sid));
@@ -855,8 +859,7 @@
       };
       const nodes = pl.nodes.map((n) => ({ ...n, st: live(n) }));
       const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
-      nodes.forEach((n) => { n.flash = prevPlan[n.id] !== undefined && prevPlan[n.id] !== n.st; });
-      const nextPlan = {}; nodes.forEach((n) => { nextPlan[n.id] = n.st; }); prevPlan = nextPlan;
+      nodes.forEach((n) => { const k = pl.id + '/' + n.id; n.flash = prevPlan[k] !== undefined && prevPlan[k] !== n.st; prevPlan[k] = n.st; });
       const depth = (n, seen = new Set()) => { if (n.d !== undefined) return n.d; if (seen.has(n.id)) return 0; seen.add(n.id); return (n.d = n.deps.length ? 1 + Math.max(...n.deps.map((d) => byId[d] ? depth(byId[d], seen) : -1)) : 0); };
       nodes.forEach((n) => depth(n));
       // A blocked step holds every step downstream of it: they cannot proceed until it clears.
@@ -872,7 +875,7 @@
       cols.forEach((c, ci) => c.forEach((n, ri) => { n.x = PAD + ci * (W + GX); n.y = PAD + ri * (H + GY) + ((rows - c.length) * (H + GY)) / 2; }));
       const edges = nodes.flatMap((n) => n.deps.filter((d) => byId[d]).map((d) => { const a = byId[d];
         const x1 = a.x + W, y1 = a.y + H / 2, x2 = n.x, y2 = n.y + H / 2, mx = (x1 + x2) / 2;
-        return `<path class="pe ${a.st === 'blocked' ? 'bad' : ''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr)"/>`; }));
+        return `<path class="pe ${a.st === 'blocked' ? 'bad' : ''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr-${pl.id})"/>`; }));
       const clip = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
       const boxes = nodes.map((n) => {
         const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
@@ -880,8 +883,8 @@
         return `<g class="pn ${n.held ? 'held' : n.st}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}</title><rect width="${W}" height="${H}" rx="6"/>
           <text x="7" y="19">${esc(l1)}</text><text class="tag" x="7" y="36">${esc(clip(meta, 34))}</text></g>`; }).join('');
       const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide'), blockedN = nodes.filter((n) => n.st === 'blocked'), heldN = nodes.filter((n) => n.held);
-      return `<div class="plan"><div class="plan-h" data-toggle-plan><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${ic(planOpen ? 'down' : 'right')}</span></div>
-        ${planOpen ? `<svg viewBox="0 0 ${width} ${height}"><defs><marker id="arr" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${edges.join('')}${boxes}</svg>
+      return `<div class="plan"><div class="plan-h" data-toggle-plan="${esc(pl.id)}"><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${ic(planOpen ? 'down' : 'right')}</span></div>
+        ${planOpen ? `<svg viewBox="0 0 ${width} ${height}"><defs><marker id="arr-${pl.id}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${edges.join('')}${boxes}</svg>
         ${blockedN.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldN.filter((h) => h.held === n).length ? ` — holding up ${heldN.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('')}${decide.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('')}` : ''}</div>`;
     }
 
@@ -967,8 +970,8 @@
 
     async function refreshTerminals() {
       try {
-        const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plan`).then((r) => r.json()).catch(() => ({}))]);
-        lastStatus = st; planData = pj.plan || null;
+        const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plans`).then((r) => r.json()).catch(() => ({}))]);
+        lastStatus = st; plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
         const agents = st.agents || [];
         if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
@@ -1045,7 +1048,7 @@
         await post('/standing', { text }); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return;
       }
       if (btn && btn.id === 'enableAlerts') { Notification.requestPermission().then((p) => toast(p === 'granted' ? 'Desktop alerts on' : 'Desktop alerts blocked by the browser', 'info')); return; }
-      if (e.target.closest('[data-toggle-plan]')) { planOpen = !planOpen; refreshTerminals(); return; }
+      { const tp = e.target.closest('[data-toggle-plan]'); if (tp) { const id = tp.dataset.togglePlan; if (planClosed.has(id)) planClosed.delete(id); else planClosed.add(id); refreshTerminals(); return; } }
       if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
       if (btn || e.target.closest('input')) return;
       const card = e.target.closest('.agent-card'); if (!card) return;
