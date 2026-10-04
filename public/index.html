@@ -208,7 +208,11 @@
 
     .terminal-body {
       flex: 1;
-      overflow: hidden;
+      overflow: auto;
+      padding: 8px 10px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 260px;
       background: #0a0e27;
       font-family: 'Menlo', monospace;
       font-size: 12px;
@@ -298,8 +302,6 @@
     </div>
   </div>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/addon-fit.min.js"></script>
   <script>
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -403,11 +405,16 @@
           }
         }
 
-        // Add/update terminal panels
+        // Add/update terminal panels (read-only tails; attaching a WebSocket would
+        // evict the same session's panel in the 3001 cockpit)
         for (const session of sessions) {
           if (!terminals.has(session.sid)) {
             createTerminalPanel(session);
           }
+          const body = terminals.get(session.sid).body;
+          const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
+          body.textContent = session.bufferTail;
+          if (atBottom) body.scrollTop = body.scrollHeight;
         }
 
         // Show empty state if no terminals
@@ -434,7 +441,7 @@
       header.className = 'terminal-header';
       header.innerHTML = `
         <div class="terminal-label">${session.label || session.agent || session.sid.slice(0, 8)}</div>
-        <div class="terminal-status">${session.cwd}</div>
+        <div class="terminal-status">${session.sid.slice(0, 8)}</div>
       `;
 
       const body = document.createElement('div');
@@ -449,66 +456,7 @@
 
       terminalsContainer.appendChild(panel);
 
-      // Attach xterm
-      const terminal = new Terminal({
-        theme: {
-          background: '#0a0e27',
-          foreground: '#e0e7ff',
-          cursor: '#6366f1',
-        },
-        fontSize: 12,
-        fontFamily: 'Menlo, monospace',
-        scrollback: 100,
-      });
-
-      const fitAddon = new FitAddon.FitAddon();
-      terminal.loadAddon(fitAddon);
-
-      terminal.open(body);
-      fitAddon.fit();
-
-      // Connect to bridge WebSocket
-      connectTerminal(session.sid, terminal);
-
-      terminals.set(session.sid, { terminal, fitAddon });
-
-      // Resize on window change
-      window.addEventListener('resize', () => {
-        if (terminals.has(session.sid)) {
-          fitAddon.fit();
-        }
-      });
-    }
-
-    // Connect a terminal to the bridge WebSocket
-    function connectTerminal(sid, terminal) {
-      const bridgeWs = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${bridgeWs}//${window.location.host.split(':')[0]}:3002/terminal/${sid}`;
-
-      const ws = new WebSocket(wsUrl);
-
-      ws.onmessage = (event) => {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'output') {
-          terminal.write(msg.data);
-        }
-      };
-
-      ws.onerror = (error) => {
-        console.error(`WebSocket error for ${sid}:`, error);
-        terminal.write('\r\n❌ Connection lost\r\n');
-      };
-
-      ws.onclose = () => {
-        console.log(`WebSocket closed for ${sid}`);
-      };
-
-      // Allow typing into terminal to send input back
-      terminal.onData((data) => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'input', data }));
-        }
-      });
+      terminals.set(session.sid, { body });
     }
 
     // Event listeners
