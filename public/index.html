@@ -342,6 +342,7 @@
     .cm.sys { align-self: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #1e293b; padding: 4px 0; max-width: 90%; text-align: center; }
     .donelist { max-height: 240px; overflow-y: auto; padding-right: 4px; }
     .stand .it .when { color: #64748b; font-style: normal; font-size: 10px; margin-left: 4px; }
+    .reading { color: #fcd34d; font-size: 10px; margin-left: 4px; }
     .moreb { margin-top: 3px; }
     .headline { font-size: 13px; color: #e2e8f0; margin: 2px 0 4px; }
     .doing { font-size: 12px; color: #fcd34d; margin-bottom: 4px; }
@@ -378,6 +379,12 @@
     .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .dlg-actions button { background: #1e293b; color: #e0e7ff; border: 1px solid #312e81; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
     .dlg-actions .go { background: #4f46e5; border-color: #6366f1; }
+    .msg-status { font-size: 10.5px; margin-top: 4px; opacity: .8; text-align: right; }
+    .msg-status.pending { opacity: .6; } .msg-status.bad { color: #fecaca; opacity: 1; }
+    .working { align-self: flex-start; font-size: 12px; color: #94a3b8; padding: 6px 10px; display: flex; align-items: center; gap: 8px; }
+    .dots { display: inline-flex; gap: 3px; } .dots i { width: 5px; height: 5px; border-radius: 50%; background: #818cf8; animation: blink 1.2s infinite; }
+    .dots i:nth-child(2) { animation-delay: .2s; } .dots i:nth-child(3) { animation-delay: .4s; }
+    @keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
     .message.failed { opacity: .55; outline: 1px solid #ef4444; }
     .stale { background: #7c2d12; color: #fed7aa; text-align: center; padding: 8px 12px; font-size: 13px; position: fixed; top: 0; left: 0; right: 0; z-index: 80; }
     .steps {
@@ -521,12 +528,13 @@
         ensureBubble();
         const s = document.createElement('div'); s.textContent = '→ ' + e.command; stepsDiv.appendChild(s);
       } else if (e.kind === 'text') {
+        if (workingRow) { workingQueued = false; paintWorking(); }
         ensureBubble();
         replyText += (replyText ? '\n\n' : '') + e.text;
         replyDiv.innerHTML = renderReply(replyText);
       } else if (e.kind === 'turn') {
         if (e.state === 'start') stopBtn.style.display = 'inline-block';
-        else { stopBtn.style.display = 'none'; currentBubble = null; }
+        else { stopBtn.style.display = 'none'; currentBubble = null; hideWorking(); finishAwaiting(true); }
       } else if (e.kind === 'peer') {
         note('↩ Message from ' + (e.fromName || 'an agent') + ': ' + e.text.slice(0, 180));
         currentBubble = null;
@@ -540,7 +548,7 @@
         toast(`${e.title}: ${e.text}`.slice(0, 220), e.level);
         try { if (window.Notification && Notification.permission === 'granted') new Notification(e.title, { body: e.text }); } catch (err) { /* ignore */ }
       } else if (e.kind === 'error') {
-        ensureBubble(); replyDiv.textContent = '❌ ' + e.text; currentBubble = null; stopBtn.style.display = 'none';
+        ensureBubble(); replyDiv.textContent = '❌ ' + e.text; currentBubble = null; stopBtn.style.display = 'none'; hideWorking(); finishAwaiting(false);
       }
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
       refreshSoon();
@@ -556,15 +564,42 @@
     let refreshTimer = null;
     function refreshSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshTerminals, 600); }
 
-    // Send a message. Your bubble appears immediately (the server's echo is matched and not drawn twice), and a failed
-    // send puts your text back in the box with a warning instead of losing it silently.
+    // Send a message. The bubble appears at once with a live delivery status under it:
+    //   Sending… → ✓ Received → (Queued behind the current task →) Working on it… → ✓ Replied
+    // and a failed send puts your text back in the box with a warning instead of losing it silently.
     let pendingEcho = null;
+    const awaiting = [];          // bubbles of messages sent and not yet answered
+    let workingRow = null, workingTimer = null, workingSince = 0, workingQueued = false;
+
+    function setStatus(bubble, text, cls) {
+      let st = bubble.querySelector('.msg-status');
+      if (!st) { st = document.createElement('div'); st.className = 'msg-status'; bubble.appendChild(st); }
+      st.textContent = text; st.className = 'msg-status ' + (cls || '');
+    }
+    function showWorking(queued) {
+      workingQueued = queued;
+      if (!workingRow) {
+        workingRow = document.createElement('div'); workingRow.className = 'working';
+        messagesContainer.appendChild(workingRow); workingSince = Date.now();
+        workingTimer = setInterval(paintWorking, 1000);
+      } else messagesContainer.appendChild(workingRow);   // keep it at the bottom
+      paintWorking(); messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+    function paintWorking() {
+      if (!workingRow) return;
+      const secs = Math.round((Date.now() - workingSince) / 1000);
+      workingRow.innerHTML = `<span class="dots"><i></i><i></i><i></i></span> ${workingQueued ? 'Queued: the orchestrator is finishing something else first' : 'Orchestrator is working on it'}${secs >= 8 ? ` · ${secs}s` : ''}${secs >= 25 ? ' · still going, long tasks can take a minute' : ''}`;
+    }
+    function hideWorking() { if (workingRow) { workingRow.remove(); workingRow = null; clearInterval(workingTimer); } }
+    function finishAwaiting(ok) { while (awaiting.length) setStatus(awaiting.shift(), ok ? '✓ Replied' : '', ok ? 'ok' : ''); }
+
     async function sendMessage() {
       const message = messageInput.value.trim();
       if (!message) return;
       messageInput.value = '';
       pendingEcho = message;
       const bubble = addMessage('user', message);
+      setStatus(bubble, 'Sending…', 'pending');
       currentBubble = null;
       if (!es || es.readyState !== 1) note('⚠ Live connection is down: reconnecting. Your message is still being sent.');
       const ctl = new AbortController();
@@ -575,9 +610,14 @@
           body: JSON.stringify({ message, model: modelPicker.value }),
         });
         if (!r.ok) throw new Error('server answered ' + r.status);
+        const info = await r.json().catch(() => ({}));
+        setStatus(bubble, info.queued ? '✓ Received · queued behind the current task' : '✓ Received · working on it…', 'ok');
+        awaiting.push(bubble);
+        showWorking(!!info.queued);
       } catch (err) {
         pendingEcho = null;
         bubble.classList.add('failed');
+        setStatus(bubble, '✕ Not sent', 'bad');
         if (!messageInput.value) messageInput.value = message;
         note('❌ Not sent (' + (err.name === 'AbortError' ? 'no answer from the orchestrator after 10s' : err.message) + '). Your text is back in the box: try again.');
       } finally { clearTimeout(timer); }
@@ -627,10 +667,10 @@
       const shown = full ? dl.items : dl.items.slice(0, 3);
       const more = full ? 0 : dl.total - shown.length;
       const rows = shown.map((x) => `<div class="it">${esc(x.text)} <i class="when">${ago(Math.round(Date.now() / 1000 - x.at))}</i></div>`).join('');
-      return `<div class="sec don"><span class="ic" title="Done">✓</span><div style="min-width:0;flex:1"><b>Done · ${dl.total}</b>
+      return `<div class="sec don"><span class="ic" title="Done">✓</span><div style="min-width:0;flex:1"><b>Done · ${dl.total}</b>${dl.of > dl.read ? `<span class="reading"> reading history ${dl.read}/${dl.of}…</span>` : ''}
         ${full ? `<div class="donelist">${rows}</div>` : rows}
         ${more > 0 ? `<div class="more">+${more} more</div>` : ''}
-        ${full && !dl.exhausted ? `<div class="moreb"><button class="linkbtn" data-backfill="${esc(a.sid)}">Load earlier work</button></div>` : ''}</div></div>`;
+</div></div>`;
     }
 
     // Where the agent stands (model-written from its recent exchanges): decisions pending, issues, completed items.
