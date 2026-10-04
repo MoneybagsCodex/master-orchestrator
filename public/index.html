@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cockpit Orchestrator</title>
+  <title>Master Orchestrator</title>
   <style>
     * {
       margin: 0;
@@ -13,71 +13,119 @@
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f1419;
+      background: #0a0e27;
       color: #e0e7ff;
-      line-height: 1.6;
-    }
-
-    .header {
-      background: linear-gradient(90deg, #1e3a8a 0%, #1e1b4b 100%);
-      border-bottom: 1px solid #3730a3;
-      padding: 16px 24px;
-      position: sticky;
-      top: 0;
-      z-index: 100;
-    }
-
-    .header h1 {
-      font-size: 20px;
-      font-weight: 600;
+      display: flex;
+      height: 100vh;
     }
 
     .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 24px;
-    }
-
-    .input-section {
-      background: #1a1f2e;
-      border: 1px solid #312e81;
-      border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 24px;
       display: flex;
-      gap: 12px;
-      align-items: flex-end;
+      width: 100%;
+      gap: 1px;
+      background: #1a1f2e;
     }
 
-    .input-group {
+    /* LEFT SIDE: Chat */
+    .chat-panel {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #0a0e27;
+      border-right: 1px solid #312e81;
     }
 
-    .input-label {
-      font-size: 12px;
-      text-transform: uppercase;
-      color: #6366f1;
-      margin-bottom: 6px;
+    .chat-header {
+      background: linear-gradient(90deg, #1e3a8a 0%, #1e1b4b 100%);
+      border-bottom: 1px solid #3730a3;
+      padding: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .chat-header h1 {
+      font-size: 18px;
       font-weight: 600;
     }
 
-    .input-field {
-      width: 100%;
-      padding: 10px 12px;
+    .model-selector {
       background: #111318;
       border: 1px solid #312e81;
       border-radius: 6px;
+      padding: 8px 12px;
+      color: #e0e7ff;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message {
+      padding: 12px 16px;
+      border-radius: 8px;
+      max-width: 80%;
+      word-wrap: break-word;
+    }
+
+    .message.user {
+      background: #6366f1;
+      color: white;
+      align-self: flex-end;
+      margin-left: 20%;
+    }
+
+    .message.agent {
+      background: #1e293b;
+      border: 1px solid #312e81;
+      color: #a5b4fc;
+      align-self: flex-start;
+      margin-right: 20%;
+    }
+
+    .message.agent.decision {
+      background: #166534;
+      border-color: #22c55e;
+      color: #dcfce7;
+    }
+
+    .message-timestamp {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 4px;
+    }
+
+    .input-area {
+      padding: 16px;
+      border-top: 1px solid #312e81;
+      display: flex;
+      gap: 8px;
+    }
+
+    .message-input {
+      flex: 1;
+      background: #111318;
+      border: 1px solid #312e81;
+      border-radius: 6px;
+      padding: 10px 12px;
       color: #e0e7ff;
       font-size: 14px;
     }
 
-    .input-field:focus {
+    .message-input:focus {
       outline: none;
       border-color: #6366f1;
       box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
     }
 
-    .button {
+    .send-btn {
       padding: 10px 24px;
       background: #6366f1;
       color: white;
@@ -86,71 +134,45 @@
       cursor: pointer;
       font-weight: 500;
       transition: all 0.2s;
-      height: 40px;
     }
 
-    .button:hover {
+    .send-btn:hover {
       background: #4f46e5;
-      transform: translateY(-1px);
     }
 
-    .button:active {
-      transform: translateY(0);
+    .send-btn:disabled {
+      background: #4b5563;
+      cursor: not-allowed;
     }
 
-    .status-section {
-      background: #1a1f2e;
-      border: 1px solid #312e81;
-      border-radius: 10px;
-      padding: 16px;
-      margin-bottom: 24px;
-    }
-
-    .status-header {
+    /* RIGHT SIDE: Dashboard */
+    .dashboard-panel {
+      flex: 1;
       display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
+      flex-direction: column;
+      background: #0a0e27;
     }
 
-    .status-title {
-      font-size: 13px;
-      text-transform: uppercase;
-      color: #6366f1;
+    .dashboard-header {
+      background: linear-gradient(90deg, #1e3a8a 0%, #1e1b4b 100%);
+      border-bottom: 1px solid #3730a3;
+      padding: 16px;
+    }
+
+    .dashboard-header h2 {
+      font-size: 18px;
       font-weight: 600;
     }
 
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #10b981;
-    }
-
-    .status-dot.offline {
-      background: #ef4444;
-    }
-
-    .mission-display {
+    .mission-info {
+      padding: 16px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       border-radius: 10px;
-      padding: 20px;
-      margin-bottom: 24px;
-      min-height: 80px;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
+      margin-bottom: 16px;
     }
 
     .mission-title {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: 600;
       margin-bottom: 8px;
     }
@@ -160,6 +182,7 @@
       gap: 16px;
       font-size: 12px;
       color: rgba(255, 255, 255, 0.8);
+      margin-bottom: 8px;
     }
 
     .progress-bar {
@@ -167,7 +190,9 @@
       border-radius: 8px;
       height: 24px;
       overflow: hidden;
-      margin-top: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .progress-fill {
@@ -183,341 +208,323 @@
       transition: width 0.4s ease;
     }
 
-    .phases-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 12px;
-      margin-bottom: 24px;
+    .dashboard-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
     }
 
-    .phase-card {
+    .agent-section {
       background: #1a1f2e;
       border: 1px solid #312e81;
       border-radius: 8px;
       padding: 12px;
-      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .agent-name {
+      font-size: 12px;
+      color: #6366f1;
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .phase-list {
+      font-size: 13px;
+      color: #a5b4fc;
+      line-height: 1.6;
+    }
+
+    .phase-item {
+      padding: 6px 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
     }
 
     .phase-status {
-      font-size: 20px;
-      margin-bottom: 4px;
+      width: 16px;
+      text-align: center;
     }
 
-    .phase-name {
+    .empty-state {
+      text-align: center;
+      color: #64748b;
+      padding: 40px 16px;
+      font-size: 14px;
+    }
+
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #111318;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #312e81;
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #4c1d95;
+    }
+
+    .decision-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+      flex-wrap: wrap;
+    }
+
+    .decision-btn {
+      padding: 8px 16px;
+      background: #10b981;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
       font-size: 12px;
-      color: #a5b4fc;
-      margin-bottom: 4px;
+      font-weight: 500;
     }
 
-    .phase-state {
-      font-size: 11px;
-      color: #818cf8;
+    .decision-btn:hover {
+      background: #059669;
     }
 
-    .log-section {
-      background: #1a1f2e;
-      border: 1px solid #312e81;
-      border-radius: 10px;
-      padding: 16px;
-      max-height: 400px;
-      overflow-y: auto;
+    .decision-btn.secondary {
+      background: #f59e0b;
     }
 
-    .log-title {
-      font-size: 13px;
-      text-transform: uppercase;
-      color: #6366f1;
-      margin-bottom: 12px;
-      font-weight: 600;
-    }
-
-    .log-entry {
-      font-size: 12px;
-      color: #a5b4fc;
-      padding: 6px 0;
-      border-bottom: 1px solid #312e81;
-      font-family: 'Monaco', 'Courier New', monospace;
-    }
-
-    .log-entry:last-child {
-      border-bottom: none;
-    }
-
-    .log-entry.event {
-      color: #10b981;
-    }
-
-    .log-entry.error {
-      color: #ef4444;
-    }
-
-    .loading {
-      display: inline-block;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      to { transform: rotate(360deg); }
+    .decision-btn.secondary:hover {
+      background: #d97706;
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>🎯 Cockpit Orchestrator</h1>
-  </div>
-
   <div class="container">
-    <!-- Input Section -->
-    <div class="input-section">
-      <div class="input-group" style="flex: 1;">
-        <div class="input-label">Mission Command (voice or text)</div>
-        <input type="text" id="commandInput" class="input-field" placeholder="e.g., Deploy v2.1.0 to production">
+    <!-- LEFT: Chat Interface -->
+    <div class="chat-panel">
+      <div class="chat-header">
+        <h1>💬 Master Orchestrator</h1>
+        <select id="modelSelect" class="model-selector">
+          <option value="claude-opus-5-5">Opus 5.5</option>
+          <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+        </select>
       </div>
-      <button class="button" id="submitBtn" onclick="submitCommand()">Send Mission</button>
-    </div>
 
-    <!-- Orchestrator Status -->
-    <div class="status-section">
-      <div class="status-header">
-        <div class="status-title">Orchestrator Connection</div>
-        <div class="status-indicator">
-          <div class="status-dot" id="statusDot"></div>
-          <span id="statusText">Connecting...</span>
+      <div id="messages" class="messages">
+        <div class="message agent">
+          <div>👋 Hi! I'm your master orchestration agent. What would you like me to do?</div>
+          <div class="message-timestamp" style="opacity: 0.5; font-size: 11px;">Ready to orchestrate</div>
         </div>
       </div>
-    </div>
 
-    <!-- Mission Display -->
-    <div id="missionDisplay" style="display: none;">
-      <div class="mission-display">
-        <div class="mission-title" id="missionTitle">No active mission</div>
-        <div class="mission-meta">
-          <span>Risk: <span id="riskLevel">—</span></span>
-          <span>Progress: <span id="progressPercent">0%</span></span>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="progressFill">0%</div>
-        </div>
+      <div class="input-area">
+        <input
+          type="text"
+          id="messageInput"
+          class="message-input"
+          placeholder="e.g., Deploy v2.1.0 to production"
+          autocomplete="off"
+        />
+        <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
       </div>
     </div>
 
-    <!-- Phase Cards -->
-    <div id="phasesContainer" class="phases-grid" style="display: none;"></div>
+    <!-- RIGHT: Dashboard -->
+    <div class="dashboard-panel">
+      <div class="dashboard-header">
+        <h2>📊 Live Execution</h2>
+      </div>
 
-    <!-- Master Agent Response -->
-    <div id="responseSection" style="display: none; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-radius: 10px; padding: 20px; margin-bottom: 24px;">
-      <div style="font-size: 13px; text-transform: uppercase; color: rgba(255,255,255,0.8); margin-bottom: 12px; font-weight: 600;">Master Agent Response</div>
-      <div id="responseText" style="font-size: 15px; color: white; line-height: 1.6;"></div>
-    </div>
+      <div style="padding: 16px; flex: 1; overflow-y: auto;">
+        <div id="missionInfo" style="display: none;">
+          <div class="mission-info">
+            <div class="mission-title" id="missionTitle">—</div>
+            <div class="mission-meta">
+              <span>Risk: <span id="riskLevel">—</span></span>
+              <span>Progress: <span id="progress">0%</span></span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill" style="width: 0%">0%</div>
+            </div>
+          </div>
+        </div>
 
-    <!-- Log -->
-    <div class="log-section">
-      <div class="log-title">Execution Log</div>
-      <div id="logContainer"></div>
+        <div id="agentStatuses"></div>
+
+        <div id="emptyState" class="empty-state">
+          Start a mission to see live execution
+        </div>
+      </div>
     </div>
   </div>
 
   <script>
-    const commandInput = document.getElementById('commandInput');
-    const submitBtn = document.getElementById('submitBtn');
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    const logContainer = document.getElementById('logContainer');
-    const missionDisplay = document.getElementById('missionDisplay');
-    const phasesContainer = document.getElementById('phasesContainer');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const messagesContainer = document.getElementById('messages');
+    const modelSelect = document.getElementById('modelSelect');
+    const missionInfo = document.getElementById('missionInfo');
+    const emptyState = document.getElementById('emptyState');
 
-    let isConnected = false;
     let currentMission = null;
-    let updateInterval = null;
-    let responseInterval = null;
+    let statusInterval = null;
 
-    // Check orchestrator connection on load
-    async function checkConnection() {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+    async function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message) return;
 
-        const response = await fetch('/api/orchestrator/status', { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          isConnected = true;
-          statusDot.classList.remove('offline');
-          statusText.textContent = '✓ Connected';
-        } else {
-          throw new Error('Not connected');
-        }
-      } catch (error) {
-        isConnected = false;
-        statusDot.classList.add('offline');
-        statusText.textContent = '✗ Orchestrator offline (port 3003)';
-        logEntry('error', 'Orchestrator not reachable. Make sure it\'s running: cd ~/projects/agent-orchestrator && npm run server', true);
-      }
-    }
-
-    // Submit mission command
-    async function submitCommand() {
-      const command = commandInput.value.trim();
-      if (!command) return;
-
-      if (!isConnected) {
-        alert('Orchestrator is not connected. Please start it first:\ncd ~/projects/agent-orchestrator && npm run demo');
-        return;
-      }
-
-      submitBtn.disabled = true;
-      submitBtn.textContent = '⏳ Sending...';
-      logEntry('event', `Submitting mission: "${command}"`);
+      // Display user message
+      addMessage('user', message);
+      messageInput.value = '';
+      sendBtn.disabled = true;
 
       try {
+        // Send command to orchestrator
         const response = await fetch('/api/orchestrator/command', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command })
+          body: JSON.stringify({
+            command: message,
+            model: modelSelect.value,
+          }),
         });
 
-        if (!response.ok) {
-          throw new Error('Failed to send command');
-        }
+        if (!response.ok) throw new Error('Failed to send command');
 
         const data = await response.json();
-        logEntry('event', `✓ Mission accepted: ${data.summary}`);
 
-        currentMission = {
-          title: command,
-          summary: data.summary,
-          riskLevel: 'low'
-        };
+        // Display agent's plan
+        if (data.plan) {
+          addMessage('agent', data.plan);
+        }
 
-        missionDisplay.style.display = 'block';
-        document.getElementById('missionTitle').textContent = `🚀 ${command}`;
-
-        commandInput.value = '';
-        commandInput.placeholder = 'Next mission...';
+        currentMission = data.workflow;
+        missionInfo.style.display = 'block';
+        emptyState.style.display = 'none';
+        document.getElementById('missionTitle').textContent = `🚀 ${message}`;
 
         // Start polling for updates
-        startPolling();
+        startStatusPolling();
       } catch (error) {
-        logEntry('error', `Failed: ${error.message}`);
+        addMessage('agent', `❌ Error: ${error.message}`);
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Send Mission';
+        sendBtn.disabled = false;
       }
     }
 
-    // Poll orchestrator for status updates
-    function startPolling() {
-      if (updateInterval) clearInterval(updateInterval);
+    function addMessage(role, content, isDecision = false) {
+      const div = document.createElement('div');
+      const className = `message ${role}${isDecision ? ' decision' : ''}`;
+      div.className = className;
 
-      updateInterval = setInterval(async () => {
+      const timestamp = new Date().toLocaleTimeString();
+      div.innerHTML = `
+        <div>${content}</div>
+        <div class="message-timestamp">${timestamp}</div>
+      `;
+
+      messagesContainer.appendChild(div);
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    }
+
+    function startStatusPolling() {
+      if (statusInterval) clearInterval(statusInterval);
+
+      statusInterval = setInterval(async () => {
         try {
           const response = await fetch('/api/orchestrator/status');
-          if (!response.ok) throw new Error('Failed to fetch status');
+          if (!response.ok) throw new Error('Status check failed');
 
-          const data = await response.json();
+          const data = response.json();
+          updateDashboard(await data);
 
-          // Update mission display
-          if (data.phases) {
-            updatePhases(data.phases);
-            updateProgress(data.progress);
-            updateRiskLevel(data.riskLevel);
-          }
-
-          // Check if mission is complete
           if (data.progress && data.progress.percentComplete === 100) {
-            logEntry('event', '✓ Mission complete!');
-            clearInterval(updateInterval);
-            startResponsePolling();
+            clearInterval(statusInterval);
+            fetchAgentResponse();
           }
         } catch (error) {
-          console.error('Polling error:', error);
+          console.error('Status polling error:', error);
         }
       }, 1000);
     }
 
-    // Poll for master agent response
-    function startResponsePolling() {
-      if (responseInterval) clearInterval(responseInterval);
+    async function fetchAgentResponse() {
+      try {
+        const response = await fetch('/api/orchestrator/response');
+        if (!response.ok) throw new Error('Failed to fetch response');
 
-      responseInterval = setInterval(async () => {
-        try {
-          const response = await fetch('/api/orchestrator/response');
-          if (!response.ok) throw new Error('Failed to fetch response');
-
-          const data = await response.json();
-
-          if (data.status === 'complete' && data.message) {
-            displayResponse(data.message);
-            clearInterval(responseInterval);
-          }
-        } catch (error) {
-          console.error('Response polling error:', error);
+        const data = await response.json();
+        if (data.message) {
+          addMessage('agent', data.message);
         }
-      }, 500);
+      } catch (error) {
+        console.error('Response fetch error:', error);
+      }
     }
 
-    function updatePhases(phases) {
-      phasesContainer.style.display = phases.length > 0 ? 'grid' : 'none';
-      phasesContainer.innerHTML = '';
+    function updateDashboard(data) {
+      if (!data.phases) return;
 
-      for (const phase of phases) {
-        const statusEmoji = phase.state === 'done' ? '✓' :
-                          phase.state === 'running' ? '⏳' :
-                          phase.state === 'blocked' ? '⚠️' : '⚫';
+      // Update progress
+      document.getElementById('progress').textContent = data.progress.percentComplete + '%';
+      document.getElementById('progressFill').style.width = data.progress.percentComplete + '%';
+      document.getElementById('progressFill').textContent = data.progress.percentComplete + '%';
 
-        const card = document.createElement('div');
-        card.className = 'phase-card';
-        card.innerHTML = `
-          <div class="phase-status">${statusEmoji}</div>
-          <div class="phase-name">${phase.description.split(' ').slice(0, 2).join(' ')}</div>
-          <div class="phase-state">${phase.state}</div>
+      // Update risk level
+      const riskEmoji = data.riskLevel === 'low' ? '🟢' : data.riskLevel === 'medium' ? '🟡' : '🔴';
+      document.getElementById('riskLevel').textContent = `${riskEmoji} ${data.riskLevel}`;
+
+      // Update agent statuses
+      const agentMap = {};
+      for (const phase of data.phases) {
+        const agent = phase.assignedAgent || 'Unassigned';
+        if (!agentMap[agent]) agentMap[agent] = [];
+        agentMap[agent].push(phase);
+      }
+
+      const statusesDiv = document.getElementById('agentStatuses');
+      statusesDiv.innerHTML = '';
+
+      for (const [agent, phases] of Object.entries(agentMap)) {
+        const section = document.createElement('div');
+        section.className = 'agent-section';
+        section.innerHTML = `
+          <div class="agent-name">${agent}</div>
+          <div class="phase-list">
+            ${phases
+              .map((p) => {
+                const icon = p.state === 'done' ? '✓' : p.state === 'running' ? '⏳' : p.state === 'ready' ? '⚪' : '⚫';
+                return `<div class="phase-item"><div class="phase-status">${icon}</div><div>${p.description}</div></div>`;
+              })
+              .join('')}
+          </div>
         `;
-        phasesContainer.appendChild(card);
+        statusesDiv.appendChild(section);
       }
     }
 
-    function updateProgress(progress) {
-      const percent = progress.percentComplete;
-      document.getElementById('progressFill').style.width = percent + '%';
-      document.getElementById('progressFill').textContent = percent + '%';
-      document.getElementById('progressPercent').textContent = percent + '%';
-    }
-
-    function updateRiskLevel(risk) {
-      const color = risk === 'low' ? '🟢' : risk === 'medium' ? '🟡' : '🔴';
-      document.getElementById('riskLevel').textContent = color + ' ' + risk;
-    }
-
-    function logEntry(type, message, immediate = false) {
-      const entry = document.createElement('div');
-      entry.className = `log-entry ${type}`;
-      const timestamp = new Date().toLocaleTimeString();
-      entry.textContent = `[${timestamp}] ${message}`;
-      logContainer.insertBefore(entry, logContainer.firstChild);
-
-      if (logContainer.children.length > 50) {
-        logContainer.removeChild(logContainer.lastChild);
+    // Allow Enter to send
+    messageInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
       }
-    }
-
-    function displayResponse(message) {
-      const responseSection = document.getElementById('responseSection');
-      const responseText = document.getElementById('responseText');
-      responseText.textContent = message;
-      responseSection.style.display = 'block';
-      logEntry('event', 'Master agent response received');
-    }
-
-    // Initialize
-    checkConnection();
-    setInterval(checkConnection, 5000);
-
-    // Allow Enter key to submit
-    commandInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') submitCommand();
     });
 
-    logEntry('event', 'Cockpit Orchestrator loaded. Ready for missions.');
+    // Add model change notice
+    modelSelect.addEventListener('change', () => {
+      if (currentMission) {
+        addMessage('agent', '📝 Model changed. Start a new mission to use the new model.');
+      }
+    });
+
+    addMessage('agent', '✓ Connected and ready');
   </script>
 </body>
 </html>
