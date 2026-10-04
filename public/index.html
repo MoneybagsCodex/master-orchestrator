@@ -230,7 +230,9 @@
     .plan svg.i { width: 1.1em; height: 1.1em; margin: 0; display: inline-block; }
     .plan .pn rect { fill: var(--surface-3); stroke-width: 1.5; transition: stroke var(--t), fill var(--t); }
     .plan .pn text { fill: var(--text); font-size: 10px; font-family: var(--font); font-weight: 550; }
-    .plan .pn .tag { font-size: 8.5px; fill: var(--text-3); font-weight: 450; }
+    .plan .pn .tag { font-size: 8px; fill: var(--text-3); font-weight: 450; }
+    .plan .pn.kid text { font-size: 9px; } .plan .pn.kid .tag { font-size: 7.5px; } .plan .pn.kid rect { stroke-width: 1.2; }
+    .plan .pt { fill: none; stroke: var(--text-3); stroke-width: 1; opacity: .55; stroke-dasharray: 2 2; }
     .plan .pn.todo rect { stroke: #4b556b; }
     .plan .pn.active rect { stroke: var(--info); fill: color-mix(in srgb, var(--info) 10%, var(--surface-3)); animation: planpulse 1.8s ease-in-out infinite; }
     .plan .pn.done rect { stroke: var(--success); fill: color-mix(in srgb, var(--success) 12%, var(--surface-2)); }
@@ -868,23 +870,34 @@
       const ownerOf = (n) => { const a = n.sid && agents.find((x) => x.sid.startsWith(n.sid)); return a ? (a.topic || a.label) : ''; };
       const clock = (n) => { const t = n.st === 'done' && n.startedAt && n.doneAt ? n.doneAt - n.startedAt : n.statusAt ? Date.now() / 1000 - n.statusAt : 0;
         if (!t || t < 1) return ''; const m = Math.floor(t / 60); return (n.st === 'done' ? 'took ' : n.st === 'todo' ? 'queued ' : '') + (m ? `${m}m` : `${Math.round(t)}s`); };
-      const cols = []; nodes.forEach((n) => (cols[n.d] = cols[n.d] || []).push(n));
-      const W = 150, H = 48, GX = 26, GY = 12, PAD = 6;
-      const rows = Math.max(...cols.map((c) => c.length));
-      const width = cols.length * W + (cols.length - 1) * GX + PAD * 2, height = rows * H + (rows - 1) * GY + PAD * 2;
-      cols.forEach((c, ci) => c.forEach((n, ri) => { n.x = PAD + ci * (W + GX); n.y = PAD + ri * (H + GY) + ((rows - c.length) * (H + GY)) / 2; }));
-      const edges = nodes.flatMap((n) => n.deps.filter((d) => byId[d]).map((d) => { const a = byId[d];
+      // Sub-agent steps (parent = a step in this plan) are nested under that step, not placed in the dependency columns.
+      const isKid = (n) => !!(n.parent && byId[n.parent] && n.parent !== n.id);
+      const top = nodes.filter((n) => !isKid(n)), kids = nodes.filter(isKid), kidsOf = (n) => kids.filter((k) => k.parent === n.id);
+      const cols = []; top.forEach((n) => (cols[n.d] = cols[n.d] || []).push(n));
+      const W = 116, H = 34, CW = 100, CH = 26, GX = 22, GY = 8, CGY = 4, IND = 16, PAD = 6;
+      const blockH = (n) => H + kidsOf(n).length * (CH + CGY);
+      const colH = (c) => c.reduce((t, n) => t + blockH(n), 0) + (c.length - 1) * GY;
+      const maxH = Math.max(...cols.filter(Boolean).map(colH));
+      const width = cols.length * W + (cols.length - 1) * GX + PAD * 2, height = maxH + PAD * 2;
+      cols.forEach((c, ci) => { if (!c) return; let y = PAD + (maxH - colH(c)) / 2; c.forEach((n) => { n.x = PAD + ci * (W + GX); n.y = y; kidsOf(n).forEach((k, i) => { k.x = n.x + IND; k.y = n.y + H + CGY + i * (CH + CGY); }); y += blockH(n) + GY; }); });
+      const edges = top.flatMap((n) => n.deps.filter((d) => byId[d] && !isKid(byId[d])).map((d) => { const a = byId[d];
         const x1 = a.x + W, y1 = a.y + H / 2, x2 = n.x, y2 = n.y + H / 2, mx = (x1 + x2) / 2;
         return `<path class="pe ${a.st === 'blocked' ? 'bad' : ''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr-${pl.id})"/>`; }));
+      // A dotted rail from the parent step down to each of its sub-agent steps.
+      const tree = top.flatMap((n) => { const ks = kidsOf(n); if (!ks.length) return []; const rx = n.x + 7;
+        return [`<path class="pt" d="M${rx},${n.y + H} V${ks[ks.length - 1].y + CH / 2}"/>`, ...ks.map((k) => `<path class="pt" d="M${rx},${k.y + CH / 2} H${k.x}"/>`)]; });
       const clip = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
-      const boxes = nodes.map((n) => {
+      const box = (n, kid) => {
+        const w = kid ? CW : W, h = kid ? CH : H, nk = kidsOf(n).length;
         const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
-        const l1 = clip(mark + n.title, 26), who = ownerOf(n), meta = [n.held ? 'held by ' + n.held.id : n.st, who && clip(who, 14), clock(n)].filter(Boolean).join(' · ');
-        return `<g class="pn ${n.held ? 'held' : n.st}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}</title><rect width="${W}" height="${H}" rx="6"/>
-          <text x="7" y="19">${esc(l1)}</text><text class="tag" x="7" y="36">${esc(clip(meta, 34))}</text></g>`; }).join('');
+        const who = ownerOf(n), meta = [n.held ? 'held by ' + n.held.id : n.st, nk ? `${nk} sub` : '', clock(n)].filter(Boolean).join(' · ');
+        return `<g class="pn ${n.held ? 'held' : n.st}${kid ? ' kid' : ''}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}${kid ? ' · sub-agent step' : ''}</title><rect width="${w}" height="${h}" rx="${kid ? 5 : 6}"/>
+          <text x="6" y="${kid ? 11 : 14}">${esc(clip(mark + n.title, kid ? 16 : 18))}</text><text class="tag" x="6" y="${kid ? 21 : 26}">${esc(clip(meta, kid ? 22 : 25))}</text></g>`;
+      };
+      const boxes = top.map((n) => box(n, false)).join('') + kids.map((n) => box(n, true)).join('');
       const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide'), blockedN = nodes.filter((n) => n.st === 'blocked'), heldN = nodes.filter((n) => n.held);
       return `<div class="plan"><div class="plan-h" data-toggle-plan="${esc(pl.id)}"><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${ic(planOpen ? 'down' : 'right')}</span></div>
-        ${planOpen ? `<svg viewBox="0 0 ${width} ${height}"><defs><marker id="arr-${pl.id}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${edges.join('')}${boxes}</svg>
+        ${planOpen ? `<svg viewBox="0 0 ${width} ${height}" style="width:${width}px;max-width:100%"><defs><marker id="arr-${pl.id}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${edges.join('')}${tree.join('')}${boxes}</svg>
         ${blockedN.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldN.filter((h) => h.held === n).length ? ` — holding up ${heldN.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('')}${decide.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('')}` : ''}</div>`;
     }
 
