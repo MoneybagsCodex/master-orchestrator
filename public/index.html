@@ -331,10 +331,12 @@
     .cm.user { background: #4338ca; color: #fff; align-self: flex-end; max-width: 85%; }
     .cm.asst { background: #1e293b; border: 1px solid #312e81; color: #cbd5e1; max-width: 92%; }
     .cm .who { display: block; font-size: 10.5px; letter-spacing: .03em; margin-bottom: 3px; }
-    .cm.recv { background: #0f2a2a; border: 1px solid #0f766e; color: #ccfbf1; align-self: flex-start; max-width: 88%; }
-    .cm.recv .who { color: #5eead4; }
-    .cm.sent { background: #1e1b4b; border: 1px dashed #6366f1; color: #e0e7ff; align-self: flex-end; max-width: 88%; }
-    .cm.sent .who { color: #a5b4fc; }
+    /* Standard chat layout, from the agent's side: what comes IN to it (you, the orchestrator, other sessions) is on the
+       right like a user message; what the agent says or sends OUT is on the left. */
+    .cm.recv { background: #4338ca; border: 1px solid #6366f1; color: #fff; align-self: flex-end; max-width: 85%; }
+    .cm.recv .who { color: #c7d2fe; }
+    .cm.sent { background: #1e293b; border: 1px dashed #475569; color: #cbd5e1; align-self: flex-start; max-width: 92%; }
+    .cm.sent .who { color: #94a3b8; }
     .cm.tool { font-family: Menlo, monospace; font-size: 11px; color: #64748b; padding: 2px 11px; }
     .cm.err { font-family: Menlo, monospace; font-size: 11px; color: #f87171; padding: 2px 11px; }
     .cm.sys { align-self: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #1e293b; padding: 4px 0; max-width: 90%; text-align: center; }
@@ -719,8 +721,8 @@
         const t = `<i class="ct">${clock(it.at)}</i>`;
         if (it.role === 'user') return `<div class="cm user">${t}${esc(it.text)}</div>`;
         if (it.role === 'assistant') return `<div class="cm asst">${t}${renderReply(it.text)}</div>`;
-        if (it.role === 'recv') return `<div class="cm recv">${t}<b class="who">⇠ Message from ${esc(it.who)}</b>${esc(it.text)}</div>`;
-        if (it.role === 'sent') return `<div class="cm sent">${t}<b class="who">⇢ Sent to ${esc(it.who)}</b>${esc(it.text)}</div>`;
+        if (it.role === 'recv') return `<div class="cm recv">${t}<b class="who">From ${esc(it.who)}</b>${esc(it.text)}</div>`;
+        if (it.role === 'sent') return `<div class="cm sent">${t}<b class="who">Sent to ${esc(it.who)}</b>${esc(it.text)}</div>`;
         if (it.role === 'tool') return `<div class="cm tool">${t}→ ${esc(it.text)}</div>`;
         if (it.role === 'error') return `<div class="cm err">${t}${esc(it.text)}</div>`;
         return `<div class="cm sys">${t}${esc(it.text)}</div>`;
