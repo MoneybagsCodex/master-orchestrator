@@ -496,15 +496,16 @@
           return `<div class="agent-card" data-sid="${esc(a.sid)}">
             <div class="agent-top">
               <span class="dot" style="background:${color}"></span>
-              <b>${esc(a.label)}</b>
+              <b>${esc(a.topic || a.label)}</b>
               <span class="pill" style="color:${color};border-color:${color}">${name}</span>
               <span class="muted">${ago(a.secondsSinceActivity)}</span>
             </div>
+            <div class="muted" style="margin:-2px 0 6px 17px">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong)</div>
             ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: it is stopped at a permission prompt${a.prompt ? ` (${esc(a.prompt)})` : ''}. Tell the orchestrator to approve or deny it.</div>` : ''}
             ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself whenever it goes idle, so it may flicker between idle and working.</div>` : ''}
             ${a.doing ? `<div class="row"><span>Last said</span>${esc(a.doing)}</div>` : ''}
             ${a.lastAsked ? `<div class="row"><span>Last asked</span>${esc(a.lastAsked)}</div>` : ''}
-            <div class="muted small">terminal ${esc(a.sid.slice(0, 8))} · ${open ? 'hide' : 'show'} raw screen</div>
+            <div class="muted small">${open ? 'hide' : 'show'} raw screen</div>
             ${open ? `<pre class="raw">${esc(raw) || '(nothing readable)'}</pre>` : ''}
           </div>`;
         }).join('');
