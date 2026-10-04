@@ -522,6 +522,31 @@
       refreshTerminals();
     });
 
+    // Restore the conversation after a refresh: the orchestrator's session persists server-side.
+    async function restoreHistory() {
+      try {
+        const { messages, busy } = await fetch(`${ORCHESTRATOR_URL}/history`).then((r) => r.json());
+        // A reply still running when the page was (re)loaded: its live stream is gone, so keep
+        // re-reading the transcript until the orchestrator finishes. Skip while this page is streaming.
+        if (busy && inflight === 0) { stopBtn.style.display = 'inline-block'; setTimeout(restoreHistory, 3000); }
+        else if (inflight === 0) stopBtn.style.display = 'none';
+        if (inflight > 0 || !messages || !messages.length) return;
+        messagesContainer.innerHTML = '';
+        for (const m of messages) {
+          if (m.role === 'user') { addMessage('user', m.text); continue; }
+          const div = addMessage('assistant', '');
+          const steps = document.createElement('div');
+          steps.className = 'steps';
+          for (const st of m.steps || []) { const s = document.createElement('div'); s.textContent = '→ ' + st; steps.appendChild(s); }
+          const reply = document.createElement('div');
+          reply.innerHTML = renderReply(m.text || '');
+          div.append(steps, reply);
+        }
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      } catch (e) { /* no history yet */ }
+    }
+    restoreHistory();
+
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
     stopBtn.addEventListener('click', () => fetch(`${ORCHESTRATOR_URL}/stop`, { method: 'POST' }));
