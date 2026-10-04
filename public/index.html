@@ -26,7 +26,6 @@
       background: #1a1f2e;
     }
 
-    /* LEFT SIDE: Chat */
     .chat-panel {
       flex: 1;
       display: flex;
@@ -49,16 +48,6 @@
       font-weight: 600;
     }
 
-    .model-selector {
-      background: #111318;
-      border: 1px solid #312e81;
-      border-radius: 6px;
-      padding: 8px 12px;
-      color: #e0e7ff;
-      font-size: 12px;
-      cursor: pointer;
-    }
-
     .messages {
       flex: 1;
       overflow-y: auto;
@@ -73,6 +62,7 @@
       border-radius: 8px;
       max-width: 80%;
       word-wrap: break-word;
+      line-height: 1.5;
     }
 
     .message.user {
@@ -88,12 +78,6 @@
       color: #a5b4fc;
       align-self: flex-start;
       margin-right: 20%;
-    }
-
-    .message.agent.decision {
-      background: #166534;
-      border-color: #22c55e;
-      color: #dcfce7;
     }
 
     .message-timestamp {
@@ -133,10 +117,9 @@
       border-radius: 6px;
       cursor: pointer;
       font-weight: 500;
-      transition: all 0.2s;
     }
 
-    .send-btn:hover {
+    .send-btn:hover:not(:disabled) {
       background: #4f46e5;
     }
 
@@ -145,7 +128,6 @@
       cursor: not-allowed;
     }
 
-    /* RIGHT SIDE: Dashboard */
     .dashboard-panel {
       flex: 1;
       display: flex;
@@ -168,7 +150,7 @@
       padding: 16px;
       background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       border-radius: 10px;
-      margin-bottom: 16px;
+      margin: 16px;
     }
 
     .mission-title {
@@ -230,29 +212,19 @@
       margin-bottom: 8px;
     }
 
-    .phase-list {
-      font-size: 13px;
-      color: #a5b4fc;
-      line-height: 1.6;
-    }
-
     .phase-item {
       padding: 6px 0;
       display: flex;
       gap: 8px;
       align-items: center;
-    }
-
-    .phase-status {
-      width: 16px;
-      text-align: center;
+      font-size: 13px;
+      color: #a5b4fc;
     }
 
     .empty-state {
       text-align: center;
       color: #64748b;
       padding: 40px 16px;
-      font-size: 14px;
     }
 
     ::-webkit-scrollbar {
@@ -271,55 +243,20 @@
     ::-webkit-scrollbar-thumb:hover {
       background: #4c1d95;
     }
-
-    .decision-buttons {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      flex-wrap: wrap;
-    }
-
-    .decision-btn {
-      padding: 8px 16px;
-      background: #10b981;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 500;
-    }
-
-    .decision-btn:hover {
-      background: #059669;
-    }
-
-    .decision-btn.secondary {
-      background: #f59e0b;
-    }
-
-    .decision-btn.secondary:hover {
-      background: #d97706;
-    }
   </style>
 </head>
 <body>
   <div class="container">
-    <!-- LEFT: Chat Interface -->
+    <!-- LEFT: Chat -->
     <div class="chat-panel">
       <div class="chat-header">
         <h1>💬 Master Orchestrator</h1>
-        <select id="modelSelect" class="model-selector">
-          <option value="claude-opus-5-5">Opus 5.5</option>
-          <option value="claude-sonnet-5-5">Sonnet 5.5</option>
-          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
-        </select>
       </div>
 
       <div id="messages" class="messages">
         <div class="message agent">
-          <div>👋 Hi! I'm your master orchestration agent. What would you like me to do?</div>
-          <div class="message-timestamp" style="opacity: 0.5; font-size: 11px;">Ready to orchestrate</div>
+          <div>👋 Hi! I'm your master orchestration agent. What would you like me to orchestrate?</div>
+          <div class="message-timestamp">Ready</div>
         </div>
       </div>
 
@@ -328,7 +265,7 @@
           type="text"
           id="messageInput"
           class="message-input"
-          placeholder="e.g., Deploy v2.1.0 to production"
+          placeholder="e.g., Deploy v3.0.0 to production"
           autocomplete="off"
         />
         <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
@@ -341,7 +278,7 @@
         <h2>📊 Live Execution</h2>
       </div>
 
-      <div style="padding: 16px; flex: 1; overflow-y: auto;">
+      <div class="dashboard-content">
         <div id="missionInfo" style="display: none;">
           <div class="mission-info">
             <div class="mission-title" id="missionTitle">—</div>
@@ -368,60 +305,16 @@
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const messagesContainer = document.getElementById('messages');
-    const modelSelect = document.getElementById('modelSelect');
     const missionInfo = document.getElementById('missionInfo');
     const emptyState = document.getElementById('emptyState');
 
     let currentMission = null;
     let statusInterval = null;
+    let isWaitingForAgent = false;
 
-    async function sendMessage() {
-      const message = messageInput.value.trim();
-      if (!message) return;
-
-      // Display user message
-      addMessage('user', message);
-      messageInput.value = '';
-      sendBtn.disabled = true;
-
-      try {
-        // Send command to orchestrator
-        const response = await fetch('/api/orchestrator/command', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            command: message,
-            model: modelSelect.value,
-          }),
-        });
-
-        if (!response.ok) throw new Error('Failed to send command');
-
-        const data = await response.json();
-
-        // Display agent's plan
-        if (data.plan) {
-          addMessage('agent', data.plan);
-        }
-
-        currentMission = data.workflow;
-        missionInfo.style.display = 'block';
-        emptyState.style.display = 'none';
-        document.getElementById('missionTitle').textContent = `🚀 ${message}`;
-
-        // Start polling for updates
-        startStatusPolling();
-      } catch (error) {
-        addMessage('agent', `❌ Error: ${error.message}`);
-      } finally {
-        sendBtn.disabled = false;
-      }
-    }
-
-    function addMessage(role, content, isDecision = false) {
+    function addMessage(role, content) {
       const div = document.createElement('div');
-      const className = `message ${role}${isDecision ? ' decision' : ''}`;
-      div.className = className;
+      div.className = `message ${role}`;
 
       const timestamp = new Date().toLocaleTimeString();
       div.innerHTML = `
@@ -433,20 +326,72 @@
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
 
+    async function sendMessage() {
+      const message = messageInput.value.trim();
+      if (!message || isWaitingForAgent) return;
+
+      addMessage('user', message);
+      messageInput.value = '';
+      sendBtn.disabled = true;
+      isWaitingForAgent = true;
+
+      try {
+        // Get Claude's initial plan
+        const planResponse = await fetch('/api/claude/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: message }),
+        });
+
+        if (!planResponse.ok) {
+          throw new Error('Failed to get plan');
+        }
+
+        const planData = await planResponse.json();
+        addMessage('agent', planData.plan);
+
+        // Start orchestrator execution
+        const orchResponse = await fetch('/api/orchestrator/command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: message }),
+        });
+
+        if (!orchResponse.ok) {
+          throw new Error('Failed to start execution');
+        }
+
+        const orchData = await orchResponse.json();
+        currentMission = orchData.workflow;
+
+        missionInfo.style.display = 'block';
+        emptyState.style.display = 'none';
+        document.getElementById('missionTitle').textContent = `🚀 ${message}`;
+
+        // Start polling
+        startStatusPolling();
+      } catch (error) {
+        addMessage('agent', `❌ Error: ${error.message}`);
+      } finally {
+        sendBtn.disabled = false;
+        isWaitingForAgent = false;
+      }
+    }
+
     function startStatusPolling() {
       if (statusInterval) clearInterval(statusInterval);
 
       statusInterval = setInterval(async () => {
         try {
           const response = await fetch('/api/orchestrator/status');
-          if (!response.ok) throw new Error('Status check failed');
+          if (!response.ok) throw new Error('Failed to fetch status');
 
-          const data = response.json();
-          updateDashboard(await data);
+          const data = await response.json();
+          updateDashboard(data);
 
           if (data.progress && data.progress.percentComplete === 100) {
             clearInterval(statusInterval);
-            fetchAgentResponse();
+            fetchFinalResponse();
           }
         } catch (error) {
           console.error('Status polling error:', error);
@@ -454,33 +399,33 @@
       }, 1000);
     }
 
-    async function fetchAgentResponse() {
+    async function fetchFinalResponse() {
       try {
-        const response = await fetch('/api/orchestrator/response');
-        if (!response.ok) throw new Error('Failed to fetch response');
+        const response = await fetch('/api/claude/summary', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ missionTitle: currentMission?.title }),
+        });
 
-        const data = await response.json();
-        if (data.message) {
-          addMessage('agent', data.message);
+        if (response.ok) {
+          const data = await response.json();
+          addMessage('agent', data.summary);
         }
       } catch (error) {
-        console.error('Response fetch error:', error);
+        console.error('Summary fetch error:', error);
       }
     }
 
     function updateDashboard(data) {
       if (!data.phases) return;
 
-      // Update progress
       document.getElementById('progress').textContent = data.progress.percentComplete + '%';
       document.getElementById('progressFill').style.width = data.progress.percentComplete + '%';
       document.getElementById('progressFill').textContent = data.progress.percentComplete + '%';
 
-      // Update risk level
       const riskEmoji = data.riskLevel === 'low' ? '🟢' : data.riskLevel === 'medium' ? '🟡' : '🔴';
       document.getElementById('riskLevel').textContent = `${riskEmoji} ${data.riskLevel}`;
 
-      // Update agent statuses
       const agentMap = {};
       for (const phase of data.phases) {
         const agent = phase.assignedAgent || 'Unassigned';
@@ -494,22 +439,20 @@
       for (const [agent, phases] of Object.entries(agentMap)) {
         const section = document.createElement('div');
         section.className = 'agent-section';
+
+        const phasesHtml = phases.map((p) => {
+          const icon = p.state === 'done' ? '✓' : p.state === 'running' ? '⏳' : p.state === 'ready' ? '⚪' : '⚫';
+          return `<div class="phase-item"><div style="width:16px">${icon}</div><div>${p.description}</div></div>`;
+        }).join('');
+
         section.innerHTML = `
           <div class="agent-name">${agent}</div>
-          <div class="phase-list">
-            ${phases
-              .map((p) => {
-                const icon = p.state === 'done' ? '✓' : p.state === 'running' ? '⏳' : p.state === 'ready' ? '⚪' : '⚫';
-                return `<div class="phase-item"><div class="phase-status">${icon}</div><div>${p.description}</div></div>`;
-              })
-              .join('')}
-          </div>
+          <div>${phasesHtml}</div>
         `;
         statusesDiv.appendChild(section);
       }
     }
 
-    // Allow Enter to send
     messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -517,14 +460,7 @@
       }
     });
 
-    // Add model change notice
-    modelSelect.addEventListener('change', () => {
-      if (currentMission) {
-        addMessage('agent', '📝 Model changed. Start a new mission to use the new model.');
-      }
-    });
-
-    addMessage('agent', '✓ Connected and ready');
+    addMessage('agent', '✓ Connected and ready to orchestrate');
   </script>
 </body>
 </html>
