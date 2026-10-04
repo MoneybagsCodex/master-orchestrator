@@ -305,6 +305,17 @@
     .latest { font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
+    .stand { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
+    .stand .sec { display: flex; gap: 6px; font-size: 11px; line-height: 1.35; }
+    .stand .ic { flex: none; width: 14px; text-align: center; }
+    .stand b { font-size: 9.5px; text-transform: uppercase; letter-spacing: .04em; margin-right: 6px; color: #64748b; }
+    .stand .it { color: #cbd5e1; display: inline; }
+    .stand .full .it, .agent-card.open .stand .it { display: block; margin-top: 1px; }
+    .stand .more { color: #64748b; display: inline; margin-left: 4px; }
+    .agent-card.open .stand .more { display: block; }
+    .stand .sec.dec .ic, .stand .sec.dec b { color: #fcd34d; }
+    .stand .sec.iss .ic, .stand .sec.iss b { color: #f87171; }
+    .stand .sec.don .ic, .stand .sec.don b { color: #34d399; }
     .headline { font-size: 13px; color: #e2e8f0; margin: 2px 0 4px; }
     .doing { font-size: 12px; color: #fcd34d; margin-bottom: 4px; }
     .turns { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
@@ -585,6 +596,20 @@
         ${chips ? `<div class="chips">${esc(chips)}</div>` : ''}</div></div>`;
     }
 
+    // Where the agent stands (model-written from its recent exchanges): decisions pending, issues, completed items.
+    function standBlock(a, full) {
+      const st = a.stand;
+      const dec = [...(a.state === 'BLOCKED' ? ['Approve or deny a permission prompt'] : []), ...((st && st.decisions) || [])];
+      if (!st && !dec.length) return '<div class="stand muted">Working out where it stands…</div>';
+      const sec = (icon, label, items, cls) => {
+        if (!items.length) return '';
+        const shown = full ? items : items.slice(0, 1), more = full ? 0 : items.length - 1;
+        return `<div class="sec ${cls}"><span class="ic" title="${label}">${icon}</span><div><b>${label}</b>${shown.map((x) => `<div class="it">${esc(x)}</div>`).join('')}${more > 0 ? `<div class="more">+${more} more</div>` : ''}</div></div>`;
+      };
+      const html = sec('⚖', 'Decide', dec, 'dec') + sec('⚠', 'Issues', (st && st.issues) || [], 'iss') + sec('✓', 'Done', (st && st.done) || [], 'don');
+      return `<div class="stand">${html || '<div class="muted">Nothing pending and no known issues.</div>'}</div>`;
+    }
+
     function agentCard(a) {
       const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
       const open = expanded.has(a.sid);
@@ -611,11 +636,10 @@
           <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
         ${working}
         ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
-        ${!open && oneLine ? `<div class="latest">${oneLine}</div>` : ''}
+        ${standBlock(a, open)}
         ${open ? `
           ${a.doing ? `<div class="doing">⏳ now: ${esc(a.doing)}</div>` : ''}
           ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
-          <div class="turns">${turns.map(turnRow).join('') || '<div class="muted">No turns recorded yet.</div>'}</div>
           ${msgs.length || tasks.length ? `<div class="tasks">${msgs.join('')}${tasks.join('')}</div>` : ''}
           <div class="muted small">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong) · ${ago(a.secondsSinceActivity)}
             · <button class="linkbtn" data-raw-toggle="${esc(a.sid)}">${rawOpen.has(a.sid) ? 'hide' : 'show'} raw screen</button></div>
