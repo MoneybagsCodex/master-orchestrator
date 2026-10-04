@@ -326,6 +326,8 @@
     .plan .pe { fill: none; stroke: #475569; stroke-width: 1.2; }
     .plan .pn .tag { font-size: 8.5px; fill: #9ca3af; }
     .plan .pdec { margin-top: 6px; font-size: 11px; color: #fcd34d; }
+    .tok { font-size: 10.5px; color: #94a3b8; margin: 3px 0 0; display: flex; flex-wrap: wrap; gap: 2px 10px; }
+    .tok b { color: #cbd5e1; font-weight: 600; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
     .stand { margin-top: 5px; display: flex; flex-direction: column; gap: 3px; }
@@ -726,6 +728,14 @@
       return `<div class="ar">${ask}${reply ? `<div class="r">↳ ${esc(String(reply).slice(0, 200))}</div>` : ''}</div>`;
     }
 
+    const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
+    function tokLine(a) {
+      const t = a.tokens; if (!t || !t.messages) return '';
+      return `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
+        <span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
+        <span>total <b>${fmtTok(t.total)}</b></span><span><b>${fmtTok(t.perHour)}</b>/hr</span>${a.state === 'WORKING' ? `<span>this turn <b>${fmtTok(t.turnTotal)}</b></span>` : ''}</div>`;
+    }
+
     function actBar(a) {
       const x = a.activity;
       if (!x || a.state !== 'WORKING') return '';
@@ -767,6 +777,7 @@
           <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
         ${working}
         ${actBar(a)}
+        ${tokLine(a)}
         ${a.doing && !open ? `<div class="doing">⏳ ${esc(a.doing)}</div>` : ''}
         ${standBlock(a, open)}
         ${open ? `
