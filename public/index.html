@@ -260,6 +260,29 @@
     .streaming {
       opacity: 0.7;
     }
+
+    .steps {
+      font-size: 11px;
+      color: #64748b;
+      margin-bottom: 6px;
+      word-break: break-all;
+    }
+    .steps:empty { display: none; }
+    .message.assistant code {
+      background: #0f172a;
+      padding: 1px 4px;
+      border-radius: 3px;
+    }
+
+    .mic-btn {
+      padding: 10px 12px;
+      background: #1e293b;
+      color: #e0e7ff;
+      border: 1px solid #312e81;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .mic-btn.listening { background: #dc2626; border-color: #dc2626; }
   </style>
 </head>
 <body>
@@ -289,6 +312,7 @@
           placeholder="e.g., Run tests on the main branch"
           autocomplete="off"
         />
+        <button class="mic-btn" id="micBtn" title="Dictate (click, speak, it sends when you pause)">🎤</button>
         <button class="send-btn" id="sendBtn">Send</button>
       </div>
     </div>
@@ -331,6 +355,13 @@
       return div;
     }
 
+    // Escape, then apply the little markdown the orchestrator uses (bold, inline code).
+    function renderReply(s) {
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/`([^`]+)`/g, '<code>$1</code>');
+    }
+
     // Send a message to the orchestrator
     async function sendMessage() {
       const message = messageInput.value.trim();
@@ -343,6 +374,10 @@
 
       const assistantDiv = addMessage('assistant', '');
       assistantDiv.classList.add('streaming');
+      const stepsDiv = document.createElement('div');
+      stepsDiv.className = 'steps';
+      const replyDiv = document.createElement('div');
+      assistantDiv.append(stepsDiv, replyDiv);
       let buffer = '';
 
       try {
@@ -360,31 +395,38 @@
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
 
+        let pending = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
 
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
+          // An SSE line can straddle two network chunks; only parse complete lines.
+          pending += decoder.decode(value, { stream: true });
+          const lines = pending.split('\n');
+          pending = lines.pop();
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const dataStr = line.slice(6);
-              try {
-                const text = JSON.parse(dataStr);
-                buffer += text;
-                assistantDiv.textContent = buffer;
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-              } catch (e) {
-                // Skip malformed JSON
+            if (!line.startsWith('data: ')) continue;
+            try {
+              const evt = JSON.parse(line.slice(6));
+              if (evt.tool) {
+                const s = document.createElement('div');
+                s.textContent = '→ ' + evt.tool;
+                stepsDiv.appendChild(s);
+              } else if (evt.text) {
+                buffer += (buffer ? '\n\n' : '') + evt.text;
+                replyDiv.innerHTML = renderReply(buffer);
               }
+              messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            } catch (e) {
+              // Skip malformed JSON
             }
           }
         }
 
         assistantDiv.classList.remove('streaming');
       } catch (error) {
-        assistantDiv.textContent = `❌ Error: ${error.message}`;
+        replyDiv.textContent = `❌ Error: ${error.message}`;
         assistantDiv.classList.remove('streaming');
       } finally {
         sendBtn.disabled = false;
@@ -419,7 +461,10 @@
           }
           const body = terminals.get(session.sid).body;
           const atBottom = body.scrollTop + body.clientHeight >= body.scrollHeight - 8;
-          body.textContent = session.bufferTail;
+          // Drop the TUI's rule lines / blank runs so the panel shows content, not chrome.
+          body.textContent = session.bufferTail.split('\n')
+            .filter(l => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l))
+            .slice(-40).join('\n');
           if (atBottom) body.scrollTop = body.scrollHeight;
         }
 
@@ -467,6 +512,31 @@
 
     // Event listeners
     sendBtn.addEventListener('click', sendMessage);
+
+    // Voice input: browser speech recognition fills the box and sends when you pause.
+    const micBtn = document.getElementById('micBtn');
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) {
+      micBtn.style.display = 'none';
+    } else {
+      const rec = new SR();
+      rec.lang = 'en-US';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onresult = (e) => {
+        let t = '';
+        for (const r of e.results) t += r[0].transcript;
+        messageInput.value = t;
+        if (e.results[e.results.length - 1].isFinal) sendMessage();
+      };
+      rec.onend = () => micBtn.classList.remove('listening');
+      rec.onerror = () => micBtn.classList.remove('listening');
+      micBtn.addEventListener('click', () => {
+        if (micBtn.classList.contains('listening')) { rec.stop(); return; }
+        micBtn.classList.add('listening');
+        try { rec.start(); } catch { micBtn.classList.remove('listening'); }
+      });
+    }
     messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
