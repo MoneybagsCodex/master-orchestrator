@@ -288,6 +288,41 @@
     .task span { flex: none; } .task em { flex: none; font-style: normal; color: #cbd5e1; }
     .task i { margin-left: auto; font-style: normal; color: #64748b; font-size: 11px; flex: none; }
     .task.waiting em { color: #fcd34d; } .task.stalled em, .task.lost em { color: #f87171; } .task.seen em, .task.reported em { color: #34d399; }
+    .headline { font-size: 13px; color: #e2e8f0; margin: 2px 0 4px; }
+    .doing { font-size: 12px; color: #fcd34d; margin-bottom: 4px; }
+    .turns { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
+    .turn { display: flex; gap: 7px; font-size: 12px; color: #94a3b8; }
+    .turn > span { flex: none; width: 14px; text-align: center; color: #6366f1; }
+    .turn .asked { color: #cbd5e1; }
+    .turn .said { color: #94a3b8; margin-top: 1px; }
+    .turn .chips { color: #64748b; font-size: 11px; margin-top: 1px; }
+    .turn.live .asked { color: #fcd34d; }
+    .turn.loop { color: #94a3b8; } .turn.loop em { font-style: normal; color: #64748b; }
+    .qa { display: flex; gap: 6px; align-items: center; margin-top: 8px; border-top: 1px solid #1e293b; padding-top: 8px; }
+    .qa button, .need-actions button, .sadd button, .srow button, .linkbtn { background: #1e293b; color: #e0e7ff; border: 1px solid #312e81; border-radius: 5px; padding: 3px 10px; font-size: 11px; cursor: pointer; }
+    .qa button:hover, .srow button:hover { border-color: #6366f1; }
+    .linkbtn { background: none; border: none; color: #818cf8; padding: 0; text-decoration: underline; }
+    .needs { background: rgba(245,158,11,.08); border: 1px solid #f59e0b; border-radius: 8px; padding: 10px 12px; }
+    .needs-h { font-size: 12px; font-weight: 600; color: #fcd34d; margin-bottom: 6px; }
+    .need { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-top: 1px solid rgba(245,158,11,.2); font-size: 12px; color: #e2e8f0; }
+    .need:first-of-type { border-top: none; }
+    .need .detail { color: #cbd5e1; opacity: .8; margin-top: 2px; word-break: break-word; }
+    .need-actions { display: flex; gap: 6px; flex: none; align-items: flex-start; }
+    .need-actions .ok { border-color: #10b981; color: #6ee7b7; } .need-actions .no { border-color: #ef4444; color: #fca5a5; }
+    .standing { background: #111318; border: 1px solid #312e81; border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+    .standing-h { cursor: pointer; font-weight: 600; color: #cbd5e1; }
+    .standing-body { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+    .srow { display: flex; justify-content: space-between; gap: 8px; color: #cbd5e1; align-items: baseline; }
+    .sadd { display: flex; gap: 6px; } .sadd input { flex: 1; background: #0a0e27; border: 1px solid #312e81; border-radius: 5px; color: #e0e7ff; padding: 5px 8px; font-size: 12px; }
+    #toasts { position: fixed; top: 14px; right: 14px; display: flex; flex-direction: column; gap: 8px; z-index: 60; max-width: 340px; }
+    .toast { background: #1e293b; border: 1px solid #312e81; color: #e2e8f0; border-radius: 8px; padding: 9px 12px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.4); }
+    .toast.warn { border-color: #f59e0b; background: #2a2110; }
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); display: flex; align-items: center; justify-content: center; z-index: 70; }
+    .dialog { background: #111827; border: 1px solid #4338ca; border-radius: 10px; padding: 18px 20px; max-width: 420px; width: 90%; }
+    .dialog h3 { font-size: 15px; margin-bottom: 8px; } .dialog p { font-size: 13px; color: #cbd5e1; white-space: pre-wrap; margin-bottom: 14px; line-height: 1.45; }
+    .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .dlg-actions button { background: #1e293b; color: #e0e7ff; border: 1px solid #312e81; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
+    .dlg-actions .go { background: #4f46e5; border-color: #6366f1; }
     .steps {
       font-size: 11px;
       color: #64748b;
@@ -438,6 +473,9 @@
       } else if (e.kind === 'notice') {
         if (e.state === 'idle') note('✓ ' + (e.text.match(/^"([^"]+)"/)?.[1] || 'An agent') + ' finished what it was doing');
         else note(NOTICE_TEXT[e.state] || e.text);
+      } else if (e.kind === 'notify') {
+        toast(`${e.title}: ${e.text}`.slice(0, 220), e.level);
+        try { if (window.Notification && Notification.permission === 'granted') new Notification(e.title, { body: e.text }); } catch (err) { /* ignore */ }
       } else if (e.kind === 'error') {
         ensureBubble(); replyDiv.textContent = '❌ ' + e.text; currentBubble = null; stopBtn.style.display = 'none';
       }
@@ -470,72 +508,163 @@
       }
     }
 
-    // One status card per agent, from the orchestrator's digest (the same data the orchestrator reads).
+    // ---- Right panel: needs-you lane, one tile per agent, standing instructions ----
     const STATE_STYLE = {
-      WORKING: ['#10b981', 'Working'],
-      IDLE: ['#64748b', 'Idle'],
-      BLOCKED: ['#f59e0b', 'Needs your decision'],
-      UNKNOWN: ['#64748b', 'Unknown'],
+      WORKING: ['#10b981', 'Working'], IDLE: ['#64748b', 'Idle'],
+      BLOCKED: ['#f59e0b', 'Needs your decision'], UNKNOWN: ['#64748b', 'Unknown'],
     };
+    const MSG_STATE = {
+      sent: ['⏳', 'sent, awaiting reply', 'waiting'], released: ['▶', 'delivered, awaiting reply', 'waiting'],
+      held: ['⏸', 'on hold: needs approval in its terminal', 'waiting'], answered: ['✓', 'answered', 'seen'],
+      denied: ['✕', 'denied', 'stalled'], expired: ['⌛', 'expired', 'stalled'], refused: ['✕', 'refused', 'stalled'],
+    };
+    const TASK_LABEL = { waiting: ['⏳', 'waiting for reply'], seen: ['✓', 'answered'], reported: ['✓', 'answered'], stalled: ['⚠', 'no reply'], lost: ['?', 'lost track'] };
     const expanded = new Set();
     const esc = (t) => String(t ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
     const ago = (s) => s == null ? '' : s < 5 ? 'just now' : s < 90 ? `${s}s ago` : s < 5400 ? `${Math.round(s / 60)}m ago` : `${Math.round(s / 3600)}h ago`;
+    let standingOpen = false;
+    let lastStatus = null;
+
+    function toolChips(tools) {
+      const e = Object.entries(tools || {}).map(([k, v]) => `${k.replace(/^mcp__[^_]+__/, '')}×${v}`);
+      return e.length ? e.slice(0, 4).join(' · ') : '';
+    }
+
+    function turnRow(t) {
+      if (t.loop) return `<div class="turn loop"><span>🔁</span><div><b>Goal loop ×${t.loop.count}</b> <em>${esc(t.loop.goal.slice(0, 90))}</em></div></div>`;
+      const chips = [toolChips(t.tools), t.files.length ? '✎ ' + t.files.slice(0, 3).join(', ') : '', t.errors ? `⚠ ${t.errors} error${t.errors > 1 ? 's' : ''}` : ''].filter(Boolean).join('  ·  ');
+      return `<div class="turn ${t.inProgress ? 'live' : ''}"><span>${t.inProgress ? '⏳' : '›'}</span><div>
+        <div class="asked">${esc(t.asked.slice(0, 110))}</div>
+        ${t.said && !t.inProgress ? `<div class="said">${esc(t.said.slice(0, 150))}</div>` : ''}
+        ${chips ? `<div class="chips">${esc(chips)}</div>` : ''}</div></div>`;
+    }
+
+    function agentCard(a) {
+      const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
+      const open = expanded.has(a.sid);
+      const turns = (a.turns || []).slice(-4);
+      const headline = [...turns].reverse().find((t) => !t.loop && t.asked);
+      const msgs = (a.messages || []).map((m) => { const [ic, lb, cls] = MSG_STATE[m.state] || ['•', m.state, '']; return `<div class="task ${cls}"><span>${ic}</span><em>${lb}</em> ${esc(m.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - m.sentAt))}</i></div>`; });
+      const tasks = (a.tasks || []).map((t) => { const [ic, lb] = TASK_LABEL[t.status] || ['•', t.status]; return `<div class="task ${t.status}"><span>${ic}</span><em>${lb}</em> ${esc(t.text.slice(0, 90))} <i>${ago(Math.round(Date.now() / 1000 - t.sentAt))}</i></div>`; });
+      return `<div class="agent-card" data-sid="${esc(a.sid)}">
+        <div class="agent-top"><span class="dot" style="background:${color}"></span><b>${esc(a.topic || a.label)}</b>
+          <span class="pill" style="color:${color};border-color:${color}">${name}</span><span class="muted">${ago(a.secondsSinceActivity)}</span></div>
+        <div class="muted" style="margin:-2px 0 6px 17px">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong)</div>
+        ${headline ? `<div class="headline">Working on: ${esc(headline.asked.slice(0, 120))}</div>` : ''}
+        ${a.doing ? `<div class="doing">⏳ now: ${esc(a.doing)}</div>` : ''}
+        ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: it is stopped at a permission prompt${a.prompt ? ` (${esc(a.prompt)})` : ''}.</div>` : ''}
+        ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
+        <div class="turns">${turns.map(turnRow).join('') || '<div class="muted">No turns recorded yet.</div>'}</div>
+        ${msgs.length || tasks.length ? `<div class="tasks">${msgs.join('')}${tasks.join('')}</div>` : ''}
+        <div class="qa">
+          <button data-act="compact" data-sid="${esc(a.sid)}">Compact</button>
+          <button data-act="retest" data-sid="${esc(a.sid)}">Retest</button>
+          <button data-act="stop" data-sid="${esc(a.sid)}">Stop</button>
+          <span class="muted" style="margin-left:auto">${open ? 'hide' : 'show'} raw screen</span>
+        </div>
+        ${open ? `<pre class="raw" data-raw="${esc(a.sid)}">loading…</pre>` : ''}
+      </div>`;
+    }
+
+    function needsLane(items) {
+      if (!items.length) return '';
+      return `<div class="needs"><div class="needs-h">Needs you · ${items.length}</div>${items.map((n) => `
+        <div class="need ${n.kind}"><div><b>${esc(n.title)}</b><div class="detail">${esc(n.detail)}</div></div>
+        <div class="need-actions">${n.actions.includes('approve') ? `<button class="ok" data-decide="approve" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Approve</button>` : ''}
+        ${n.actions.includes('deny') ? `<button class="no" data-decide="deny" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Deny</button>` : ''}</div></div>`).join('')}</div>`;
+    }
+
+    function summaryStrip(st) {
+      const sm = st.summary || { total: 0, waiting: 0, replied: 0, stalled: 0, held: 0 };
+      const pct = sm.total ? Math.round((sm.replied / sm.total) * 100) : 0;
+      return `<div class="mission"><div class="mission-line"><b>Messages to agents, last hour</b>
+        <span>${sm.replied} of ${sm.total} answered · ${sm.waiting} waiting${sm.held ? ` · ${sm.held} on hold` : ''}${sm.stalled ? ` · ${sm.stalled} problem${sm.stalled > 1 ? 's' : ''}` : ''}</span></div>
+        <div class="bar"><div style="width:${pct}%"></div></div></div>`;
+    }
+
+    let standingList = [];
+    function standingPanel() {
+      return `<div class="standing"><div class="standing-h" data-toggle-standing>Standing instructions · ${standingList.length} <span class="muted">${standingOpen ? '▾' : '▸'}</span></div>
+        ${standingOpen ? `<div class="standing-body">
+          ${standingList.map((x) => `<div class="srow"><span>${esc(x.text)}</span><button data-del-standing="${esc(x.id)}">remove</button></div>`).join('') || '<div class="muted">None yet. Example: “Tell me as soon as the car agent has the loan numbers.”</div>'}
+          <div class="sadd"><input id="standingInput" placeholder="Add an instruction the orchestrator should keep applying" /><button id="standingAdd">Add</button></div>
+          <div class="muted" style="margin-top:6px"><button id="enableAlerts" class="linkbtn">Enable desktop alerts</button></div></div>` : ''}</div>`;
+    }
 
     async function refreshTerminals() {
       try {
-        const [st, tl] = await Promise.all([
-          fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()),
-          fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).catch(() => ({ sessions: [] })),
-        ]);
-        const tails = Object.fromEntries((tl.sessions || []).map((s) => [s.sid, s.bufferTail]));
+        const st = await fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json());
+        lastStatus = st;
         const agents = st.agents || [];
-
-        if (!agents.length) {
-          terminalsContainer.innerHTML = `<div class="empty-state"><div>${st.error ? esc(st.error) : 'No agents running'}</div></div>`;
-          return;
+        if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
+        // Don't wipe the standing-instruction input while someone is typing in it.
+        const typing = document.activeElement && document.activeElement.id === 'standingInput';
+        if (typing) return;
+        terminalsContainer.innerHTML = needsLane(st.needsYou || []) + summaryStrip(st)
+          + (agents.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
+        for (const sid of expanded) {
+          const pre = terminalsContainer.querySelector(`[data-raw="${sid}"]`);
+          if (pre) fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).then((tl) => {
+            const s = (tl.sessions || []).find((x) => x.sid === sid);
+            pre.textContent = (s ? s.bufferTail.split('\n').filter((l) => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l)).slice(-30).join('\n') : '') || '(nothing readable)';
+          }).catch(() => {});
         }
-
-        const sm = st.summary || { total: 0, waiting: 0, replied: 0, stalled: 0 };
-        const blocked = agents.filter((a) => a.state === 'BLOCKED').length;
-        const pct = sm.total ? Math.round((sm.replied / sm.total) * 100) : 0;
-        const summaryHtml = `<div class="mission">
-          <div class="mission-line"><b>Delegations, last hour</b>
-            <span>${sm.replied} of ${sm.total} answered · ${sm.waiting} waiting${sm.stalled ? ` · ${sm.stalled} stalled` : ''}${blocked ? ` · <b style="color:#fcd34d">${blocked} agent${blocked > 1 ? 's' : ''} need${blocked > 1 ? '' : 's'} you</b>` : ''}</span></div>
-          <div class="bar"><div style="width:${pct}%"></div></div></div>`;
-        const TASK_LABEL = { waiting: ['⏳', 'waiting for reply'], seen: ['✓', 'answered'], reported: ['✓', 'answered'], stalled: ['⚠', 'no reply'], lost: ['?', 'lost track'] };
-        terminalsContainer.innerHTML = summaryHtml + agents.map((a) => {
-          const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
-          const open = expanded.has(a.sid);
-          const raw = (tails[a.sid] || '').split('\n').filter((l) => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l)).slice(-30).join('\n');
-          return `<div class="agent-card" data-sid="${esc(a.sid)}">
-            <div class="agent-top">
-              <span class="dot" style="background:${color}"></span>
-              <b>${esc(a.topic || a.label)}</b>
-              <span class="pill" style="color:${color};border-color:${color}">${name}</span>
-              <span class="muted">${ago(a.secondsSinceActivity)}</span>
-            </div>
-            <div class="muted" style="margin:-2px 0 6px 17px">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong)</div>
-            ${a.state === 'BLOCKED' ? `<div class="blocked">Waiting on you: it is stopped at a permission prompt${a.prompt ? ` (${esc(a.prompt)})` : ''}. Tell the orchestrator to approve or deny it.</div>` : ''}
-            ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself whenever it goes idle, so it may flicker between idle and working.</div>` : ''}
-            ${a.doing ? `<div class="row"><span>Last said</span>${esc(a.doing)}</div>` : ''}
-            ${a.lastAsked ? `<div class="row"><span>Last asked</span>${esc(a.lastAsked)}</div>` : ''}
-            ${(a.tasks || []).length ? `<div class="tasks">${a.tasks.map((t) => { const [ic, lb] = TASK_LABEL[t.status] || ['•', t.status]; return `<div class="task ${t.status}"><span>${ic}</span><em>${lb}</em> ${esc(t.text)} <i>${ago(Math.round(Date.now() / 1000 - t.sentAt))}</i></div>`; }).join('')}</div>` : ''}
-            <div class="muted small">${open ? 'hide' : 'show'} raw screen</div>
-            ${open ? `<pre class="raw">${esc(raw) || '(nothing readable)'}</pre>` : ''}
-          </div>`;
-        }).join('');
-      } catch (error) {
-        console.error('Error refreshing agents:', error);
-      }
+      } catch (error) { console.error('Error refreshing agents:', error); }
     }
 
-    terminalsContainer.addEventListener('click', (e) => {
-      const card = e.target.closest('.agent-card');
-      if (!card) return;
-      const sid = card.dataset.sid;
-      expanded.has(sid) ? expanded.delete(sid) : expanded.add(sid);
-      refreshTerminals();
+    // ---- confirmation + toasts ----
+    function toast(text, level) {
+      let box = document.getElementById('toasts');
+      if (!box) { box = document.createElement('div'); box.id = 'toasts'; document.body.appendChild(box); }
+      const t = document.createElement('div'); t.className = 'toast ' + (level || 'info'); t.textContent = text;
+      box.appendChild(t); setTimeout(() => t.remove(), 9000);
+    }
+    function confirmDialog(title, body, okLabel) {
+      return new Promise((resolve) => {
+        const ov = document.createElement('div'); ov.className = 'overlay';
+        ov.innerHTML = `<div class="dialog"><h3>${esc(title)}</h3><p>${esc(body)}</p><div class="dlg-actions"><button class="cancel">Cancel</button><button class="go">${esc(okLabel)}</button></div></div>`;
+        ov.querySelector('.cancel').onclick = () => { ov.remove(); resolve(false); };
+        ov.querySelector('.go').onclick = () => { ov.remove(); resolve(true); };
+        document.body.appendChild(ov);
+      });
+    }
+    const ACTION_TEXT = {
+      compact: ['Compact this agent?', 'Runs /compact: its context is replaced by a summary and this cannot be undone.', 'Compact'],
+      retest: ['Ask it to re-run its tests?', 'Sends it a message asking it to re-run its tests or checks and report exactly what passed and failed.', 'Send'],
+      stop: ['Interrupt this agent?', 'Sends Esc, which interrupts what it is doing right now. The conversation is kept.', 'Interrupt'],
+    };
+    async function post(path, body) {
+      const r = await fetch(`${ORCHESTRATOR_URL}${path}`, { method: path === '/decide' || path === '/action' || path === '/standing' ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      return r.json();
+    }
+
+    terminalsContainer.addEventListener('click', async (e) => {
+      const btn = e.target.closest('button');
+      if (btn && btn.dataset.act) {
+        const card = btn.closest('.agent-card'); const a = (lastStatus?.agents || []).find((x) => x.sid === btn.dataset.sid);
+        const [title, body, ok] = ACTION_TEXT[btn.dataset.act];
+        if (!(await confirmDialog(title, `Target: “${a?.topic || a?.label}” [${btn.dataset.sid.slice(0, 8)}]\n${body}`, ok))) return;
+        const res = await post('/action', { sid: btn.dataset.sid, action: btn.dataset.act });
+        toast(res.message || 'Done', res.ok ? 'info' : 'warn'); refreshTerminals(); return;
+      }
+      if (btn && btn.dataset.decide) {
+        const verb = btn.dataset.decide === 'approve' ? 'Approve' : 'Deny';
+        if (!(await confirmDialog(`${verb} this?`, `${btn.dataset.title}\n${btn.dataset.detail}`, verb))) return;
+        const res = await post('/decide', { id: btn.dataset.id, decision: btn.dataset.decide });
+        toast(res.message || 'Done', res.ok ? 'info' : 'warn'); refreshTerminals(); return;
+      }
+      if (btn && btn.dataset.delStanding) { await post('/standing/' + btn.dataset.delStanding); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return; }
+      if (btn && btn.id === 'standingAdd') {
+        const inp = document.getElementById('standingInput'); const text = inp.value.trim(); if (!text) return;
+        await post('/standing', { text }); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return;
+      }
+      if (btn && btn.id === 'enableAlerts') { Notification.requestPermission().then((p) => toast(p === 'granted' ? 'Desktop alerts on' : 'Desktop alerts blocked by the browser', 'info')); return; }
+      if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
+      if (btn || e.target.closest('input')) return;
+      const card = e.target.closest('.agent-card'); if (!card) return;
+      const sid = card.dataset.sid; expanded.has(sid) ? expanded.delete(sid) : expanded.add(sid); refreshTerminals();
     });
+    fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json()).then((d) => { standingList = d.standing || []; }).catch(() => {});
 
     // Restore the conversation after a refresh (the orchestrator session persists server-side), then go live.
     async function restoreHistory() {
