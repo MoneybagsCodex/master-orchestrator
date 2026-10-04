@@ -340,7 +340,8 @@
     const terminalsContainer = document.getElementById('terminalsContainer');
 
     const ORCHESTRATOR_URL = 'http://localhost:3003';
-    const BRIDGE_URL = new URLSearchParams(location.search).get('bridge') || 'http://localhost:3002';
+    // Terminal list comes via the orchestrator, which merges in cockpit labels (older bridges lack them).
+    const BRIDGE_URL = ORCHESTRATOR_URL;
 
     let isStreaming = false;
     const terminals = new Map(); // Map of sid -> {terminal, fitAddon}
