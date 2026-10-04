@@ -323,6 +323,8 @@
     .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; }
     .dlg-actions button { background: #1e293b; color: #e0e7ff; border: 1px solid #312e81; border-radius: 6px; padding: 6px 14px; cursor: pointer; }
     .dlg-actions .go { background: #4f46e5; border-color: #6366f1; }
+    .message.failed { opacity: .55; outline: 1px solid #ef4444; }
+    .stale { background: #7c2d12; color: #fed7aa; text-align: center; padding: 8px 12px; font-size: 13px; position: fixed; top: 0; left: 0; right: 0; z-index: 80; }
     .steps {
       font-size: 11px;
       color: #64748b;
@@ -352,7 +354,7 @@
     <!-- LEFT: Chat -->
     <div class="chat-panel">
       <div class="chat-header">
-        <h1>💬 Master Orchestrator</h1>
+        <h1>💬 Master Orchestrator <span id="liveDot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#64748b;margin-left:6px;vertical-align:middle"></span></h1>
         <select id="modelPicker" class="model-picker">
           <option value="claude-haiku-4-5-20251001" selected>Haiku 4.5</option>
           <option value="claude-sonnet-5-5">Sonnet 5.5</option>
@@ -456,7 +458,10 @@
 
     function handleEvent(e) {
       lastSeq = Math.max(lastSeq, e.seq || 0);
-      if (e.kind === 'user') { addMessage('user', e.text); currentBubble = null; stopBtn.style.display = 'inline-block'; }
+      if (e.kind === 'user') {
+        if (pendingEcho !== null && e.text === pendingEcho) pendingEcho = null; else { addMessage('user', e.text); }
+        currentBubble = null; stopBtn.style.display = 'inline-block';
+      }
       else if (e.kind === 'tool') {
         ensureBubble();
         const s = document.createElement('div'); s.textContent = '→ ' + e.command; stepsDiv.appendChild(s);
@@ -493,20 +498,40 @@
     let refreshTimer = null;
     function refreshSoon() { clearTimeout(refreshTimer); refreshTimer = setTimeout(refreshTerminals, 600); }
 
-    // Send a message: the server echoes it back on the event stream, which is what draws the bubble.
+    // Send a message. Your bubble appears immediately (the server's echo is matched and not drawn twice), and a failed
+    // send puts your text back in the box with a warning instead of losing it silently.
+    let pendingEcho = null;
     async function sendMessage() {
       const message = messageInput.value.trim();
       if (!message) return;
       messageInput.value = '';
+      pendingEcho = message;
+      const bubble = addMessage('user', message);
+      currentBubble = null;
+      if (!es || es.readyState !== 1) note('⚠ Live connection is down: reconnecting. Your message is still being sent.');
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 10000);
       try {
-        await fetch(`${ORCHESTRATOR_URL}/chat`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
+        const r = await fetch(`${ORCHESTRATOR_URL}/chat`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Orch-UI': '3' }, signal: ctl.signal,
           body: JSON.stringify({ message, model: modelPicker.value }),
         });
+        if (!r.ok) throw new Error('server answered ' + r.status);
       } catch (err) {
-        note('❌ Could not reach the orchestrator: ' + err.message);
-      }
+        pendingEcho = null;
+        bubble.classList.add('failed');
+        if (!messageInput.value) messageInput.value = message;
+        note('❌ Not sent (' + (err.name === 'AbortError' ? 'no answer from the orchestrator after 10s' : err.message) + '). Your text is back in the box: try again.');
+      } finally { clearTimeout(timer); }
     }
+
+    // Header light: green when the live stream is connected, and a warning if this page is older than the server.
+    const UI_VERSION = 3;
+    function paintLive() { const d = document.getElementById('liveDot'); if (d) { const ok = es && es.readyState === 1; d.style.background = ok ? '#10b981' : '#f59e0b'; d.title = ok ? 'Live connection to the orchestrator' : 'Reconnecting…'; } }
+    setInterval(paintLive, 1000);
+    fetch(`${ORCHESTRATOR_URL}/health`).then((r) => r.json()).then((h) => {
+      if (h.ui && h.ui !== UI_VERSION) { const b = document.createElement('div'); b.className = 'stale'; b.textContent = 'This page is out of date. Refresh it (Cmd+Shift+R) so sending and replies work.'; document.body.prepend(b); }
+    }).catch(() => {});
 
     // ---- Right panel: needs-you lane, one tile per agent, standing instructions ----
     const STATE_STYLE = {
