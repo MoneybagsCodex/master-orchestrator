@@ -327,6 +327,8 @@
     .plan .pn .tag { font-size: 8.5px; fill: #9ca3af; }
     .plan .pdec { margin-top: 6px; font-size: 11px; color: #fcd34d; }
     .tok { font-size: 10.5px; color: #94a3b8; margin: 3px 0 0; display: flex; flex-wrap: wrap; gap: 2px 10px; }
+    .tok .ctx.hot { color: #fbbf24; font-weight: 600; } .tok .ctx.hot b { color: #fbbf24; }
+    .thresh { font-size: 11px; color: #94a3b8; margin: 4px 0; } .thresh select { background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 4px; font-size: 11px; }
     .tok b { color: #cbd5e1; font-weight: 600; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
@@ -729,10 +731,12 @@
     }
 
     const fmtTok = (n) => n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'k' : String(n);
+    let ctxThreshold = 150000;
+    try { const v = Number(localStorage.getItem('ctxThreshold')); if (v >= 10000) ctxThreshold = v; } catch { /* storage unavailable */ }
     function tokLine(a) {
       const t = a.tokens; if (!t || !t.messages) return '';
       return `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
-        <span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
+        ${t.context ? `<span class="ctx ${t.context > ctxThreshold ? 'hot' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)">${t.context > ctxThreshold ? '⚠ ' : ''}context <b>${fmtTok(t.context)}</b>${t.context > ctxThreshold ? ` &gt; ${fmtTok(ctxThreshold)}: consider compacting` : ''}</span>` : ''}<span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
         <span>total <b>${fmtTok(t.total)}</b></span><span><b>${fmtTok(t.perHour)}</b>/hr</span>${a.state === 'WORKING' ? `<span>this turn <b>${fmtTok(t.turnTotal)}</b></span>` : ''}</div>`;
     }
 
@@ -837,7 +841,8 @@
       const pct = sm.total ? Math.round((sm.replied / sm.total) * 100) : 0;
       return `<div class="mission"><div class="mission-line"><b>Messages to agents, last hour</b>
         <span>${sm.replied} of ${sm.total} answered · ${sm.waiting} waiting${sm.held ? ` · ${sm.held} on hold` : ''}${sm.stalled ? ` · ${sm.stalled} problem${sm.stalled > 1 ? 's' : ''}` : ''}</span></div>
-        <div class="bar"><div style="width:${pct}%"></div></div></div>`;
+        <div class="bar"><div style="width:${pct}%"></div></div>
+        <div class="thresh">Flag agents whose context exceeds <select id="ctxThresh">${[100000, 150000, 200000, 300000, 500000].map((v) => `<option value="${v}" ${v === ctxThreshold ? 'selected' : ''}>${fmtTok(v)}</option>`).join('')}</select> tokens</div></div>`;
     }
 
     let standingList = [];
@@ -904,7 +909,7 @@
         const agents = st.agents || [];
         if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
-        const typing = document.activeElement && document.activeElement.id === 'standingInput';
+        const typing = document.activeElement && (document.activeElement.id === 'standingInput' || document.activeElement.id === 'ctxThresh');
         if (typing) return;
         terminalsContainer.innerHTML = needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
           + (agents.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
@@ -944,6 +949,12 @@
       return r.json();
     }
 
+    terminalsContainer.addEventListener('change', (e) => {
+      if (e.target.id !== 'ctxThresh') return;
+      ctxThreshold = Number(e.target.value);
+      try { localStorage.setItem('ctxThreshold', String(ctxThreshold)); } catch { /* storage unavailable */ }
+      e.target.blur(); refreshTerminals();
+    });
     terminalsContainer.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
       if (btn && btn.dataset.act) {
