@@ -22,6 +22,8 @@
 
     .container {
       display: flex;
+      height: 100vh;
+      overflow: hidden;
       width: 100%;
       gap: 1px;
       background: #1a1f2e;
@@ -30,6 +32,8 @@
     /* LEFT: Chat Panel */
     .chat-panel {
       flex: 0 0 40%;
+      min-height: 0;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       background: #0a0e27;
@@ -68,6 +72,7 @@
 
     .messages {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 16px;
       display: flex;
@@ -147,6 +152,8 @@
     /* RIGHT: Terminals Panel */
     .terminals-panel {
       flex: 1;
+      min-width: 0;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       background: #0a0e27;
@@ -180,8 +187,7 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
-      min-height: 200px;
-      flex: 1;
+      flex: none;
     }
 
     .terminal-header {
@@ -310,7 +316,7 @@
     const terminalsContainer = document.getElementById('terminalsContainer');
 
     const ORCHESTRATOR_URL = 'http://localhost:3003';
-    const BRIDGE_URL = 'http://localhost:3002';
+    const BRIDGE_URL = new URLSearchParams(location.search).get('bridge') || 'http://localhost:3002';
 
     let isStreaming = false;
     const terminals = new Map(); // Map of sid -> {terminal, fitAddon}
