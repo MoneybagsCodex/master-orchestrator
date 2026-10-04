@@ -279,6 +279,15 @@
     .raw { background: #0a0e27; border-radius: 6px; padding: 8px; margin-top: 8px; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 220px; overflow: auto; }
 
     .sys-note { align-self: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #312e81; padding-top: 6px; margin-top: 4px; }
+    .mission { background: #111318; border: 1px solid #312e81; border-radius: 8px; padding: 10px 14px; font-size: 12px; }
+    .mission-line { display: flex; justify-content: space-between; gap: 10px; color: #cbd5e1; margin-bottom: 6px; flex-wrap: wrap; }
+    .bar { background: #0a0e27; border-radius: 6px; height: 8px; overflow: hidden; }
+    .bar div { background: #10b981; height: 100%; transition: width .4s; }
+    .tasks { margin-top: 8px; border-top: 1px solid #1e293b; padding-top: 6px; }
+    .task { font-size: 12px; color: #94a3b8; margin-top: 3px; display: flex; gap: 6px; align-items: baseline; }
+    .task span { flex: none; } .task em { flex: none; font-style: normal; color: #cbd5e1; }
+    .task i { margin-left: auto; font-style: normal; color: #64748b; font-size: 11px; flex: none; }
+    .task.waiting em { color: #fcd34d; } .task.stalled em, .task.lost em { color: #f87171; } .task.seen em, .task.reported em { color: #34d399; }
     .steps {
       font-size: 11px;
       color: #64748b;
@@ -490,7 +499,15 @@
           return;
         }
 
-        terminalsContainer.innerHTML = agents.map((a) => {
+        const sm = st.summary || { total: 0, waiting: 0, replied: 0, stalled: 0 };
+        const blocked = agents.filter((a) => a.state === 'BLOCKED').length;
+        const pct = sm.total ? Math.round((sm.replied / sm.total) * 100) : 0;
+        const summaryHtml = `<div class="mission">
+          <div class="mission-line"><b>Delegations, last hour</b>
+            <span>${sm.replied} of ${sm.total} answered · ${sm.waiting} waiting${sm.stalled ? ` · ${sm.stalled} stalled` : ''}${blocked ? ` · <b style="color:#fcd34d">${blocked} agent${blocked > 1 ? 's' : ''} need${blocked > 1 ? '' : 's'} you</b>` : ''}</span></div>
+          <div class="bar"><div style="width:${pct}%"></div></div></div>`;
+        const TASK_LABEL = { waiting: ['⏳', 'waiting for reply'], seen: ['✓', 'answered'], reported: ['✓', 'answered'], stalled: ['⚠', 'no reply'], lost: ['?', 'lost track'] };
+        terminalsContainer.innerHTML = summaryHtml + agents.map((a) => {
           const [color, name] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
           const open = expanded.has(a.sid);
           const raw = (tails[a.sid] || '').split('\n').filter((l) => l.trim() && !/^[\s─━│╭╮╰╯]+$/.test(l)).slice(-30).join('\n');
@@ -506,6 +523,7 @@
             ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself whenever it goes idle, so it may flicker between idle and working.</div>` : ''}
             ${a.doing ? `<div class="row"><span>Last said</span>${esc(a.doing)}</div>` : ''}
             ${a.lastAsked ? `<div class="row"><span>Last asked</span>${esc(a.lastAsked)}</div>` : ''}
+            ${(a.tasks || []).length ? `<div class="tasks">${a.tasks.map((t) => { const [ic, lb] = TASK_LABEL[t.status] || ['•', t.status]; return `<div class="task ${t.status}"><span>${ic}</span><em>${lb}</em> ${esc(t.text)} <i>${ago(Math.round(Date.now() / 1000 - t.sentAt))}</i></div>`; }).join('')}</div>` : ''}
             <div class="muted small">${open ? 'hide' : 'show'} raw screen</div>
             ${open ? `<pre class="raw">${esc(raw) || '(nothing readable)'}</pre>` : ''}
           </div>`;
