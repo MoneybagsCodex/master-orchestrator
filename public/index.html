@@ -732,6 +732,12 @@
       const label = x.phase === 'tool' ? `running ${esc(x.tool || 'a tool')}` : x.phase === 'writing' ? 'writing a reply' : 'thinking';
       const secs = x.turnStart ? Math.max(0, Math.round(Date.now() / 1000 - x.turnStart)) : 0;
       const t = secs >= 60 ? `${Math.floor(secs / 60)}m ${secs % 60}s` : `${secs}s`;
+      // A real percentage exists only when the plan assigns steps to this agent: done steps / its steps.
+      const mine = (planData && planData.nodes || []).filter((n) => n.sid && a.sid.startsWith(n.sid));
+      if (mine.length) {
+        const dn = mine.filter((n) => n.status === 'done').length, pc = Math.round((dn / mine.length) * 100);
+        return `<div class="act ${x.phase}"><div class="lbl"><b>${label}</b><span>${pc}% · ${dn}/${mine.length} plan steps · ${t}</span></div><div class="trk"><div style="width:${pc}%;height:100%;background:#34d399"></div></div></div>`;
+      }
       return `<div class="act ${x.phase}"><div class="lbl"><b>${label}</b><span>${x.steps} step${x.steps === 1 ? '' : 's'} · ${t}</span></div><div class="trk"><i></i></div></div>`;
     }
 
