@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Master Orchestrator</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.css" />
   <style>
     * {
       margin: 0;
@@ -12,7 +13,7 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Menlo, monospace;
       background: #0a0e27;
       color: #e0e7ff;
       display: flex;
@@ -26,8 +27,9 @@
       background: #1a1f2e;
     }
 
+    /* LEFT: Chat Panel */
     .chat-panel {
-      flex: 1;
+      flex: 0 0 40%;
       display: flex;
       flex-direction: column;
       background: #0a0e27;
@@ -41,11 +43,27 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
+      gap: 12px;
     }
 
     .chat-header h1 {
       font-size: 18px;
       font-weight: 600;
+      flex: 1;
+    }
+
+    .model-picker {
+      background: #111318;
+      border: 1px solid #312e81;
+      color: #e0e7ff;
+      padding: 8px 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .model-picker:hover {
+      border-color: #6366f1;
     }
 
     .messages {
@@ -60,30 +78,27 @@
     .message {
       padding: 12px 16px;
       border-radius: 8px;
-      max-width: 80%;
       word-wrap: break-word;
       line-height: 1.5;
+      font-size: 14px;
     }
 
     .message.user {
       background: #6366f1;
       color: white;
       align-self: flex-end;
-      margin-left: 20%;
+      max-width: 85%;
     }
 
-    .message.agent {
+    .message.assistant {
       background: #1e293b;
       border: 1px solid #312e81;
       color: #a5b4fc;
       align-self: flex-start;
-      margin-right: 20%;
-    }
-
-    .message-timestamp {
-      font-size: 10px;
-      opacity: 0.6;
-      margin-top: 4px;
+      max-width: 85%;
+      white-space: pre-wrap;
+      font-family: 'Menlo', monospace;
+      font-size: 13px;
     }
 
     .input-area {
@@ -101,6 +116,7 @@
       padding: 10px 12px;
       color: #e0e7ff;
       font-size: 14px;
+      font-family: inherit;
     }
 
     .message-input:focus {
@@ -128,103 +144,90 @@
       cursor: not-allowed;
     }
 
-    .dashboard-panel {
+    /* RIGHT: Terminals Panel */
+    .terminals-panel {
       flex: 1;
       display: flex;
       flex-direction: column;
       background: #0a0e27;
+      overflow: hidden;
     }
 
-    .dashboard-header {
+    .terminals-header {
       background: linear-gradient(90deg, #1e3a8a 0%, #1e1b4b 100%);
       border-bottom: 1px solid #3730a3;
       padding: 16px;
     }
 
-    .dashboard-header h2 {
+    .terminals-header h2 {
       font-size: 18px;
       font-weight: 600;
     }
 
-    .mission-info {
-      padding: 16px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 10px;
-      margin: 16px;
-    }
-
-    .mission-title {
-      font-size: 16px;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .mission-meta {
-      display: flex;
-      gap: 16px;
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
-      margin-bottom: 8px;
-    }
-
-    .progress-bar {
-      background: rgba(0, 0, 0, 0.2);
-      border-radius: 8px;
-      height: 24px;
-      overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .progress-fill {
-      background: #10b981;
-      height: 100%;
-      width: 0%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-size: 11px;
-      font-weight: 600;
-      transition: width 0.4s ease;
-    }
-
-    .dashboard-content {
+    .terminals-content {
       flex: 1;
       overflow-y: auto;
       padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .agent-section {
-      background: #1a1f2e;
+    .terminal-panel {
+      background: #111318;
       border: 1px solid #312e81;
       border-radius: 8px;
-      padding: 12px;
-      margin-bottom: 12px;
-    }
-
-    .agent-name {
-      font-size: 12px;
-      color: #6366f1;
-      text-transform: uppercase;
-      font-weight: 600;
-      margin-bottom: 8px;
-    }
-
-    .phase-item {
-      padding: 6px 0;
+      overflow: hidden;
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      min-height: 200px;
+      flex: 1;
+    }
+
+    .terminal-header {
+      background: #1a1f2e;
+      border-bottom: 1px solid #312e81;
+      padding: 8px 12px;
+      display: flex;
+      justify-content: space-between;
       align-items: center;
-      font-size: 13px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #6366f1;
+    }
+
+    .terminal-label {
+      text-transform: uppercase;
+    }
+
+    .terminal-status {
+      font-size: 11px;
       color: #a5b4fc;
+      opacity: 0.8;
+    }
+
+    .terminal-body {
+      flex: 1;
+      overflow: hidden;
+      background: #0a0e27;
+      font-family: 'Menlo', monospace;
+      font-size: 12px;
+    }
+
+    .xterm {
+      width: 100%;
+      height: 100%;
     }
 
     .empty-state {
       text-align: center;
       color: #64748b;
       padding: 40px 16px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
 
     ::-webkit-scrollbar {
@@ -243,6 +246,10 @@
     ::-webkit-scrollbar-thumb:hover {
       background: #4c1d95;
     }
+
+    .streaming {
+      opacity: 0.7;
+    }
   </style>
 </head>
 <body>
@@ -251,12 +258,16 @@
     <div class="chat-panel">
       <div class="chat-header">
         <h1>💬 Master Orchestrator</h1>
+        <select id="modelPicker" class="model-picker">
+          <option value="claude-opus-5-5">Opus 5.5</option>
+          <option value="claude-sonnet-5-5">Sonnet 5.5</option>
+          <option value="claude-haiku-4-5-20251001">Haiku 4.5</option>
+        </select>
       </div>
 
-      <div id="messages" class="messages">
-        <div class="message agent">
-          <div>👋 Hi! I'm your master orchestration agent. What would you like me to orchestrate?</div>
-          <div class="message-timestamp">Ready</div>
+      <div id="messagesContainer" class="messages">
+        <div class="message assistant">
+          👋 Hi! I'm your master orchestration agent. What would you like me to orchestrate?
         </div>
       </div>
 
@@ -265,194 +276,243 @@
           type="text"
           id="messageInput"
           class="message-input"
-          placeholder="e.g., Deploy v3.0.0 to production"
+          placeholder="e.g., Run tests on the main branch"
           autocomplete="off"
         />
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()">Send</button>
+        <button class="send-btn" id="sendBtn">Send</button>
       </div>
     </div>
 
-    <!-- RIGHT: Dashboard -->
-    <div class="dashboard-panel">
-      <div class="dashboard-header">
-        <h2>📊 Live Execution</h2>
+    <!-- RIGHT: Live Terminals -->
+    <div class="terminals-panel">
+      <div class="terminals-header">
+        <h2>📊 Live Terminals</h2>
       </div>
 
-      <div class="dashboard-content">
-        <div id="missionInfo" style="display: none;">
-          <div class="mission-info">
-            <div class="mission-title" id="missionTitle">—</div>
-            <div class="mission-meta">
-              <span>Risk: <span id="riskLevel">—</span></span>
-              <span>Progress: <span id="progress">0%</span></span>
-            </div>
-            <div class="progress-bar">
-              <div class="progress-fill" id="progressFill" style="width: 0%">0%</div>
-            </div>
-          </div>
-        </div>
-
-        <div id="agentStatuses"></div>
-
-        <div id="emptyState" class="empty-state">
-          Start a mission to see live execution
+      <div id="terminalsContainer" class="terminals-content">
+        <div class="empty-state">
+          <div>No terminals running</div>
+          <div style="font-size: 12px; margin-top: 8px; opacity: 0.6;">Waiting for agents to start...</div>
         </div>
       </div>
     </div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/xterm.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xterm/5.3.0/addon-fit.min.js"></script>
   <script>
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
-    const messagesContainer = document.getElementById('messages');
-    const missionInfo = document.getElementById('missionInfo');
-    const emptyState = document.getElementById('emptyState');
+    const messagesContainer = document.getElementById('messagesContainer');
+    const modelPicker = document.getElementById('modelPicker');
+    const terminalsContainer = document.getElementById('terminalsContainer');
 
-    let currentMission = null;
-    let statusInterval = null;
-    let isWaitingForAgent = false;
+    const ORCHESTRATOR_URL = 'http://localhost:3003';
+    const BRIDGE_URL = 'http://localhost:3002';
 
+    let isStreaming = false;
+    const terminals = new Map(); // Map of sid -> {terminal, fitAddon}
+
+    // Add a message to the chat
     function addMessage(role, content) {
       const div = document.createElement('div');
       div.className = `message ${role}`;
-
-      const timestamp = new Date().toLocaleTimeString();
-      div.innerHTML = `
-        <div>${content}</div>
-        <div class="message-timestamp">${timestamp}</div>
-      `;
-
+      div.textContent = content;
       messagesContainer.appendChild(div);
       messagesContainer.scrollTop = messagesContainer.scrollHeight;
+      return div;
     }
 
+    // Send a message to the orchestrator
     async function sendMessage() {
       const message = messageInput.value.trim();
-      if (!message || isWaitingForAgent) return;
+      if (!message || isStreaming) return;
 
       addMessage('user', message);
       messageInput.value = '';
       sendBtn.disabled = true;
-      isWaitingForAgent = true;
+      isStreaming = true;
+
+      const assistantDiv = addMessage('assistant', '');
+      assistantDiv.classList.add('streaming');
+      let buffer = '';
 
       try {
-        // Get Claude's initial plan
-        const planResponse = await fetch('/api/claude/plan', {
+        const response = await fetch(`${ORCHESTRATOR_URL}/chat`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: message }),
+          body: JSON.stringify({ message, model: modelPicker.value }),
         });
 
-        if (!planResponse.ok) {
-          throw new Error('Failed to get plan');
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
 
-        const planData = await planResponse.json();
-        addMessage('agent', planData.plan);
+        // Parse Server-Sent Events
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
 
-        // Start orchestrator execution
-        const orchResponse = await fetch('/api/orchestrator/command', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ command: message }),
-        });
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-        if (!orchResponse.ok) {
-          throw new Error('Failed to start execution');
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6);
+              try {
+                const text = JSON.parse(dataStr);
+                buffer += text;
+                assistantDiv.textContent = buffer;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+              } catch (e) {
+                // Skip malformed JSON
+              }
+            }
+          }
         }
 
-        const orchData = await orchResponse.json();
-        currentMission = orchData.workflow;
-
-        missionInfo.style.display = 'block';
-        emptyState.style.display = 'none';
-        document.getElementById('missionTitle').textContent = `🚀 ${message}`;
-
-        // Start polling
-        startStatusPolling();
+        assistantDiv.classList.remove('streaming');
       } catch (error) {
-        addMessage('agent', `❌ Error: ${error.message}`);
+        assistantDiv.textContent = `❌ Error: ${error.message}`;
+        assistantDiv.classList.remove('streaming');
       } finally {
         sendBtn.disabled = false;
-        isWaitingForAgent = false;
+        isStreaming = false;
+
+        // Refresh terminal list after agent completes
+        setTimeout(refreshTerminals, 500);
       }
     }
 
-    function startStatusPolling() {
-      if (statusInterval) clearInterval(statusInterval);
-
-      statusInterval = setInterval(async () => {
-        try {
-          const response = await fetch('/api/orchestrator/status');
-          if (!response.ok) throw new Error('Failed to fetch status');
-
-          const data = await response.json();
-          updateDashboard(data);
-
-          if (data.progress && data.progress.percentComplete === 100) {
-            clearInterval(statusInterval);
-            fetchFinalResponse();
-          }
-        } catch (error) {
-          console.error('Status polling error:', error);
-        }
-      }, 1000);
-    }
-
-    async function fetchFinalResponse() {
+    // Refresh the list of live terminals
+    async function refreshTerminals() {
       try {
-        const response = await fetch('/api/claude/summary', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ missionTitle: currentMission?.title }),
-        });
+        const response = await fetch(`${BRIDGE_URL}/terminals`);
+        const data = await response.json();
+        const sessions = data.sessions || [];
 
-        if (response.ok) {
-          const data = await response.json();
-          addMessage('agent', data.summary);
+        // Remove terminals that no longer exist
+        for (const [sid, _] of terminals) {
+          if (!sessions.find(s => s.sid === sid)) {
+            const panel = document.querySelector(`[data-sid="${sid}"]`);
+            if (panel) panel.remove();
+            terminals.delete(sid);
+          }
+        }
+
+        // Add/update terminal panels
+        for (const session of sessions) {
+          if (!terminals.has(session.sid)) {
+            createTerminalPanel(session);
+          }
+        }
+
+        // Show empty state if no terminals
+        if (sessions.length === 0 && terminals.size === 0) {
+          terminalsContainer.innerHTML = `
+            <div class="empty-state">
+              <div>No terminals running</div>
+              <div style="font-size: 12px; margin-top: 8px; opacity: 0.6;">Waiting for agents to start...</div>
+            </div>
+          `;
         }
       } catch (error) {
-        console.error('Summary fetch error:', error);
+        console.error('Error refreshing terminals:', error);
       }
     }
 
-    function updateDashboard(data) {
-      if (!data.phases) return;
+    // Create a terminal panel for a session
+    function createTerminalPanel(session) {
+      const panel = document.createElement('div');
+      panel.className = 'terminal-panel';
+      panel.setAttribute('data-sid', session.sid);
 
-      document.getElementById('progress').textContent = data.progress.percentComplete + '%';
-      document.getElementById('progressFill').style.width = data.progress.percentComplete + '%';
-      document.getElementById('progressFill').textContent = data.progress.percentComplete + '%';
+      const header = document.createElement('div');
+      header.className = 'terminal-header';
+      header.innerHTML = `
+        <div class="terminal-label">${session.label || session.agent || session.sid.slice(0, 8)}</div>
+        <div class="terminal-status">${session.cwd}</div>
+      `;
 
-      const riskEmoji = data.riskLevel === 'low' ? '🟢' : data.riskLevel === 'medium' ? '🟡' : '🔴';
-      document.getElementById('riskLevel').textContent = `${riskEmoji} ${data.riskLevel}`;
+      const body = document.createElement('div');
+      body.className = 'terminal-body';
 
-      const agentMap = {};
-      for (const phase of data.phases) {
-        const agent = phase.assignedAgent || 'Unassigned';
-        if (!agentMap[agent]) agentMap[agent] = [];
-        agentMap[agent].push(phase);
-      }
+      panel.appendChild(header);
+      panel.appendChild(body);
 
-      const statusesDiv = document.getElementById('agentStatuses');
-      statusesDiv.innerHTML = '';
+      // Remove empty state
+      const emptyState = terminalsContainer.querySelector('.empty-state');
+      if (emptyState) emptyState.remove();
 
-      for (const [agent, phases] of Object.entries(agentMap)) {
-        const section = document.createElement('div');
-        section.className = 'agent-section';
+      terminalsContainer.appendChild(panel);
 
-        const phasesHtml = phases.map((p) => {
-          const icon = p.state === 'done' ? '✓' : p.state === 'running' ? '⏳' : p.state === 'ready' ? '⚪' : '⚫';
-          return `<div class="phase-item"><div style="width:16px">${icon}</div><div>${p.description}</div></div>`;
-        }).join('');
+      // Attach xterm
+      const terminal = new Terminal({
+        theme: {
+          background: '#0a0e27',
+          foreground: '#e0e7ff',
+          cursor: '#6366f1',
+        },
+        fontSize: 12,
+        fontFamily: 'Menlo, monospace',
+        scrollback: 100,
+      });
 
-        section.innerHTML = `
-          <div class="agent-name">${agent}</div>
-          <div>${phasesHtml}</div>
-        `;
-        statusesDiv.appendChild(section);
-      }
+      const fitAddon = new FitAddon.FitAddon();
+      terminal.loadAddon(fitAddon);
+
+      terminal.open(body);
+      fitAddon.fit();
+
+      // Connect to bridge WebSocket
+      connectTerminal(session.sid, terminal);
+
+      terminals.set(session.sid, { terminal, fitAddon });
+
+      // Resize on window change
+      window.addEventListener('resize', () => {
+        if (terminals.has(session.sid)) {
+          fitAddon.fit();
+        }
+      });
     }
 
+    // Connect a terminal to the bridge WebSocket
+    function connectTerminal(sid, terminal) {
+      const bridgeWs = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${bridgeWs}//${window.location.host.split(':')[0]}:3002/terminal/${sid}`;
+
+      const ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === 'output') {
+          terminal.write(msg.data);
+        }
+      };
+
+      ws.onerror = (error) => {
+        console.error(`WebSocket error for ${sid}:`, error);
+        terminal.write('\r\n❌ Connection lost\r\n');
+      };
+
+      ws.onclose = () => {
+        console.log(`WebSocket closed for ${sid}`);
+      };
+
+      // Allow typing into terminal to send input back
+      terminal.onData((data) => {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'input', data }));
+        }
+      });
+    }
+
+    // Event listeners
+    sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -460,7 +520,9 @@
       }
     });
 
-    addMessage('agent', '✓ Connected and ready to orchestrate');
+    // Initial terminal refresh
+    refreshTerminals();
+    setInterval(refreshTerminals, 2000); // Poll every 2 seconds for new terminals
   </script>
 </body>
 </html>
