@@ -61,7 +61,7 @@
       --bg: #eef1f6; --surface-1: #ffffff; --surface-2: #f6f8fb; --surface-3: #e9edf4; --surface-inset: #dfe5ee;
       --line: rgba(15, 23, 42, .1); --line-strong: rgba(15, 23, 42, .2); --hl: rgba(255, 255, 255, .8);
       --text: #111a2b; --text-2: #3b4760; --text-3: #5b6882;
-      --accent: #4f46e5; --accent-strong: #4338ca; --success: #0f9f6e; --warning: #b7791f; --danger: #d33a3a; --info: #0b7fc0;
+      --accent: #4f46e5; --accent-strong: #4338ca; --success: #0b7d57; --warning: #8f5f0e; --danger: #c42f2f; --info: #0b7fc0;
       --sh-1: 0 1px 2px rgba(30, 41, 59, .12), 0 4px 12px rgba(30, 41, 59, .06);
       --sh-2: 0 1px 3px rgba(30, 41, 59, .14), 0 8px 22px rgba(30, 41, 59, .09);
       --sh-3: 0 6px 14px rgba(30, 41, 59, .16), 0 24px 56px rgba(30, 41, 59, .2);
@@ -69,7 +69,7 @@
     :root[data-theme="slate"] {
       --bg: #14181d; --surface-1: #1c2128; --surface-2: #232a33; --surface-3: #2c353f; --surface-inset: #161b21;
       --text: #e6e9ed; --text-2: #b4bcc6; --text-3: #8b95a1; --idle-line: #566170;
-      --accent: #7fb0d6; --accent-strong: #3f7fae; --success: #5fc59a; --warning: #e0b24f; --danger: #ee7b7b; --info: #6cc3e6;
+      --accent: #7fb0d6; --accent-strong: #386f9a; --success: #5fc59a; --warning: #e0b24f; --danger: #ee7b7b; --info: #6cc3e6;
     }
     :root[data-theme="ocean"] {
       --bg: #04141c; --surface-1: #08202c; --surface-2: #0d2b3a; --surface-3: #133a4d; --surface-inset: #061a24;
@@ -81,6 +81,26 @@
       --text: #fbeee9; --text-2: #dcbdb6; --text-3: #b3908f; --idle-line: #7a5560;
       --accent: #fb923c; --accent-strong: #c2410c; --success: #6ee7a8; --warning: #fcd34d; --danger: #fb7185; --info: #f0abfc;
       --danger-text: #ffd5d0;
+    }
+    :root[data-theme="forest"] {
+      --bg: #0a130d; --surface-1: #101c14; --surface-2: #16271c; --surface-3: #1e3427; --surface-inset: #0c160f;
+      --text: #e6f2e8; --text-2: #adc8b3; --text-3: #82a08a; --idle-line: #4a6b54;
+      --accent: #7ed957; --accent-strong: #2f7d32; --success: #4ade80; --warning: #e5c15a; --danger: #f2776b; --info: #5ec8c0;
+    }
+    :root[data-theme="midnight"] {
+      --bg: #050816; --surface-1: #0a1027; --surface-2: #101937; --surface-3: #18244a; --surface-inset: #070c1e;
+      --text: #e4e9fb; --text-2: #aab6dc; --text-3: #8191bd; --idle-line: #44558a;
+      --accent: #6ea8ff; --accent-strong: #2f5fd0; --success: #3fd6a0; --warning: #f5c34f; --danger: #ff7a8a; --info: #5cd0ff;
+    }
+    :root[data-theme="nord"] {
+      --bg: #242933; --surface-1: #2e3440; --surface-2: #3b4252; --surface-3: #434c5e; --surface-inset: #272c36;
+      --text: #eceff4; --text-2: #c5cdd9; --text-3: #98a4b8; --idle-line: #667389;
+      --accent: #88c0d0; --accent-strong: #3f7186; --success: #a3be8c; --warning: #ebcb8b; --danger: #f0959d; --info: #81a1c1;
+    }
+    :root[data-theme="dracula"] {
+      --bg: #1e1f29; --surface-1: #282a36; --surface-2: #303243; --surface-3: #3b3e54; --surface-inset: #21222c;
+      --text: #f8f8f2; --text-2: #cfd0e0; --text-3: #9ea2c4; --idle-line: #6272a4;
+      --accent: #bd93f9; --accent-strong: #7b4fd1; --success: #50fa7b; --warning: #f1fa8c; --danger: #ff6e6e; --info: #8be9fd;
     }
     .theme-picker { margin-left: auto; }
 
@@ -528,6 +548,10 @@
           <option value="slate">Slate</option>
           <option value="ocean">Ocean</option>
           <option value="sunset">Sunset</option>
+          <option value="forest">Forest</option>
+          <option value="midnight">Midnight</option>
+          <option value="nord">Nord</option>
+          <option value="dracula">Dracula</option>
         </select>
       </div>
 
@@ -548,7 +572,7 @@
     const modelPicker = document.getElementById('modelPicker');
     const themePicker = document.getElementById('themePicker');
     { // theme: the <head> script applied the saved choice before paint; this keeps the dropdown in sync and saves changes
-      const THEMES = ['dark', 'light', 'slate', 'ocean', 'sunset'];
+      const THEMES = ['dark', 'light', 'slate', 'ocean', 'sunset', 'forest', 'midnight', 'nord', 'dracula'];
       let saved = 'dark';
       try { const t = localStorage.getItem('theme'); if (THEMES.includes(t)) saved = t; } catch { /* storage unavailable */ }
       document.documentElement.setAttribute('data-theme', saved);
