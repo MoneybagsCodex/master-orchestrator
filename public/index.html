@@ -332,6 +332,22 @@
     .thresh { font-size: 11px; color: #94a3b8; margin: 4px 0; } .thresh select { background: #111827; color: #e5e7eb; border: 1px solid #334155; border-radius: 4px; font-size: 11px; }
     .errs { margin: 4px 0; padding: 4px 8px; border-left: 3px solid #f87171; background: #2a1215; border-radius: 4px; font-size: 10.5px; color: #fecaca; }
     .errs b { color: #fca5a5; } .errs div { white-space: normal; word-break: break-word; }
+    .ctxrow { display: flex; align-items: center; gap: 8px; font-size: 10.5px; color: #94a3b8; margin: 4px 0 2px; }
+    .ctxrow .ctxl b { color: #cbd5e1; } .ctxrow.hot .ctxl, .ctxrow.hot .ctxl b { color: #fbbf24; font-weight: 600; } .ctxrow.warm .ctxl b { color: #fcd34d; }
+    .ctxbar { flex: 1; height: 5px; background: #1f2937; border-radius: 3px; overflow: hidden; min-width: 40px; }
+    .ctxbar i { display: block; height: 100%; background: #38bdf8; border-radius: 3px; transition: width .6s; }
+    .ctxrow.warm .ctxbar i { background: #fbbf24; } .ctxrow.hot .ctxbar i { background: #f87171; }
+    .cbtn { background: #422006; color: #fbbf24; border: 1px solid #b45309; border-radius: 4px; font-size: 10px; padding: 1px 7px; cursor: pointer; }
+    .cbtn:hover { background: #78350f; }
+    .stepchip { margin: 4px 0 2px; padding: 3px 8px; border-radius: 5px; font-size: 11px; background: #131c31; border-left: 3px solid #475569; display: flex; justify-content: space-between; gap: 8px; }
+    .stepchip span { color: #94a3b8; white-space: nowrap; } .stepchip b { font-weight: 600; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .stepchip.active { border-left-color: #fbbf24; } .stepchip.blocked { border-left-color: #f87171; background: #2a1215; } .stepchip.decide { border-left-color: #f59e0b; }
+    .stepchip.ok { border-left-color: #34d399; } .stepchip.none { color: #64748b; font-style: italic; }
+    .fleet { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; position: sticky; top: 0; z-index: 5; background: #0b1020; padding: 6px 0; }
+    .fc { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; border: 1px solid #334155; color: #cbd5e1; background: #111827; }
+    .fc.work { border-color: #059669; color: #6ee7b7; } .fc.need { border-color: #d97706; color: #fcd34d; } .fc.bad { border-color: #dc2626; color: #fca5a5; } .fc.warn { border-color: #b45309; color: #fbbf24; }
+    .plan .pn.flash rect { animation: planflash 1.4s ease-out 1; }
+    @keyframes planflash { 0% { stroke-width: 5; filter: brightness(2); } 100% { stroke-width: 1.5; filter: none; } }
     .tok b { color: #cbd5e1; font-weight: 600; }
     .agent-card .doing { margin: 2px 0 0; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-card .blocked { margin: 4px 0 0; padding: 3px 7px; font-size: 11px; }
@@ -742,9 +758,35 @@
     }
     function tokLine(a) {
       const t = a.tokens; if (!t || !t.messages) return '';
-      return `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
-        ${t.compactedAt && !t.context ? `<span class="ctx" title="The conversation was just compacted; the new size appears after the agent's next reply">✓ compacted ${ago(Math.max(0, Date.now() / 1000 - t.compactedAt))}, new size after its next reply</span>` : ''}${t.context ? `<span class="ctx ${t.context > ctxThreshold ? 'hot' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)">${t.context > ctxThreshold ? '⚠ ' : ''}context <b>${fmtTok(t.context)}</b>${t.context > ctxThreshold ? ` &gt; ${fmtTok(ctxThreshold)}: consider compacting` : ''}</span>` : ''}<span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
+      const over = t.context > ctxThreshold, pct = Math.min(100, Math.round((t.context / ctxThreshold) * 100));
+      const ctx = t.compactedAt && !t.context
+        ? `<div class="ctxrow"><span class="ctxl" title="The conversation was just compacted; the new size appears after the agent's next reply">✓ compacted ${ago(Math.max(0, Date.now() / 1000 - t.compactedAt))}; new size after its next reply</span></div>`
+        : t.context ? `<div class="ctxrow ${over ? 'hot' : pct >= 75 ? 'warm' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)"><span class="ctxl">${over ? '⚠ ' : ''}context <b>${fmtTok(t.context)}</b> / ${fmtTok(ctxThreshold)}</span><span class="ctxbar"><i style="width:${pct}%"></i></span>${over ? `<button class="cbtn" data-act="compact" data-sid="${esc(a.sid)}" title="Compact its context">⇣ Compact</button>` : ''}</div>` : '';
+      return ctx + `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
+        <span>in <b>${fmtTok(t.input)}</b></span><span>out <b>${fmtTok(t.output)}</b></span><span>cache read <b>${fmtTok(t.cacheRead)}</b></span>
         <span>total <b>${fmtTok(t.total)}</b></span><span><b>${fmtTok(t.perHour)}</b>/hr</span>${a.state === 'WORKING' ? `<span>this turn <b>${fmtTok(t.turnTotal)}</b></span>` : ''}</div>`;
+    }
+
+    function stepChip(a) {
+      const pl = planData; if (!pl || !pl.nodes || !pl.nodes.length) return '';
+      const mine = pl.nodes.filter((n) => n.sid && a.sid.startsWith(n.sid));
+      if (!mine.length) return '<div class="stepchip none">Plan: no step assigned to this agent</div>';
+      const cur = mine.find((n) => n.status === 'blocked') || mine.find((n) => n.status === 'active') || mine.find((n) => n.status === 'decide') || mine.find((n) => n.status === 'todo');
+      const done = mine.filter((n) => n.status === 'done').length;
+      if (!cur) return `<div class="stepchip ok"><b>✓ All ${mine.length} assigned plan step${mine.length > 1 ? 's' : ''} done</b></div>`;
+      const icon = { blocked: '⛔', active: '▶', decide: '❓', todo: '○' }[cur.status] || '○';
+      return `<div class="stepchip ${cur.status}" title="${esc(cur.title)}"><b>${icon} ${esc(cur.title)}</b><span>step ${done + 1} of ${mine.length} · ${cur.status}</span></div>`;
+    }
+
+    function fleetBar(st, agents) {
+      const n = (f) => agents.filter(f).length, working = n((a) => a.state === 'WORKING'), idle = n((a) => a.state === 'IDLE'), blocked = n((a) => a.state === 'BLOCKED');
+      const over = agents.filter((a) => a.tokens && a.tokens.context > ctxThreshold), needs = (st.needsYou || []).length;
+      const nodes = (planData && planData.nodes) || [], pd = nodes.filter((x) => x.status === 'done').length;
+      return `<div class="fleet">
+        <span class="fc work">● ${working} working</span><span class="fc">${idle} idle</span>
+        ${blocked ? `<span class="fc bad">⛔ ${blocked} blocked</span>` : ''}${needs ? `<span class="fc need">⚑ ${needs} need${needs === 1 ? 's' : ''} you</span>` : ''}
+        ${over.length ? `<span class="fc warn" title="${esc(over.map((a) => a.topic || a.label).join(', '))}">⚠ ${over.length} over context flag</span>` : ''}
+        ${nodes.length ? `<span class="fc">Plan ${pd}/${nodes.length}</span>` : ''}</div>`;
     }
 
     function actBar(a) {
@@ -786,6 +828,7 @@
       return `<div class="agent-card ${open ? 'open' : ''}" data-sid="${esc(a.sid)}">
         <div class="row1"><span class="dot" style="background:${color}"></span><b class="ttl">${esc(a.topic || a.label)}</b>
           <span class="pill" style="color:${color};border-color:${color}">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ⏳</span>` : ''}${mini}</div>
+        ${stepChip(a)}
         ${working}
         ${actBar(a)}
         ${tokLine(a)}
@@ -811,7 +854,7 @@
         ${n.actions.includes('deny') ? `<button class="no" data-decide="deny" data-id="${esc(n.id)}" data-title="${esc(n.title)}" data-detail="${esc(n.detail)}">Deny</button>` : ''}</div></div>`).join('')}</div>`;
     }
 
-    let planData = null, planOpen = true;
+    let planData = null, planOpen = true, prevPlan = {};
     function planPanel(agents) {
       const pl = planData; if (!pl || !pl.nodes || !pl.nodes.length) return '';
       // A node tied to an agent follows that agent's real state, so the graph never claims more than the agents report.
@@ -822,6 +865,8 @@
       };
       const nodes = pl.nodes.map((n) => ({ ...n, st: live(n) }));
       const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+      nodes.forEach((n) => { n.flash = prevPlan[n.id] !== undefined && prevPlan[n.id] !== n.st; });
+      const nextPlan = {}; nodes.forEach((n) => { nextPlan[n.id] = n.st; }); prevPlan = nextPlan;
       const depth = (n, seen = new Set()) => { if (n.d !== undefined) return n.d; if (seen.has(n.id)) return 0; seen.add(n.id); return (n.d = n.deps.length ? 1 + Math.max(...n.deps.map((d) => byId[d] ? depth(byId[d], seen) : -1)) : 0); };
       nodes.forEach((n) => depth(n));
       // A blocked step holds every step downstream of it: they cannot proceed until it clears.
@@ -842,7 +887,7 @@
       const boxes = nodes.map((n) => {
         const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
         const l1 = clip(mark + n.title, 26), who = ownerOf(n), meta = [n.held ? 'held by ' + n.held.id : n.st, who && clip(who, 14), clock(n)].filter(Boolean).join(' · ');
-        return `<g class="pn ${n.held ? 'held' : n.st}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}</title><rect width="${W}" height="${H}" rx="6"/>
+        return `<g class="pn ${n.held ? 'held' : n.st}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}</title><rect width="${W}" height="${H}" rx="6"/>
           <text x="7" y="19">${esc(l1)}</text><text class="tag" x="7" y="36">${esc(clip(meta, 34))}</text></g>`; }).join('');
       const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide'), blockedN = nodes.filter((n) => n.st === 'blocked'), heldN = nodes.filter((n) => n.held);
       return `<div class="plan"><div class="plan-h" data-toggle-plan><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${planOpen ? '▾' : '▸'}</span></div>
@@ -925,8 +970,10 @@
         // Don't wipe the standing-instruction input while someone is typing in it.
         const typing = document.activeElement && (document.activeElement.id === 'standingInput' || document.activeElement.id === 'ctxThresh');
         if (typing) return;
-        terminalsContainer.innerHTML = needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
-          + (agents.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
+        const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
+        const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
+        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
+          + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         for (const sid of rawOpen) {
           const pre = terminalsContainer.querySelector(`[data-raw="${sid}"]`);
           if (pre) fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).then((tl) => {
@@ -1061,7 +1108,7 @@
 
     // Initial terminal refresh
     refreshTerminals();
-    setInterval(refreshTerminals, 3000);
+    setInterval(refreshTerminals, 2000);
   </script>
 </body>
 </html>
