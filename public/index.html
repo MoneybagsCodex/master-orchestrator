@@ -340,6 +340,9 @@
     .cm.tool { font-family: Menlo, monospace; font-size: 11px; color: #64748b; padding: 2px 11px; }
     .cm.err { font-family: Menlo, monospace; font-size: 11px; color: #f87171; padding: 2px 11px; }
     .cm.sys { align-self: center; font-size: 11px; color: #94a3b8; border-top: 1px solid #1e293b; padding: 4px 0; max-width: 90%; text-align: center; }
+    .donelist { max-height: 240px; overflow-y: auto; padding-right: 4px; }
+    .stand .it .when { color: #64748b; font-style: normal; font-size: 10px; margin-left: 4px; }
+    .moreb { margin-top: 3px; }
     .headline { font-size: 13px; color: #e2e8f0; margin: 2px 0 4px; }
     .doing { font-size: 12px; color: #fcd34d; margin-bottom: 4px; }
     .turns { margin-top: 6px; display: flex; flex-direction: column; gap: 5px; }
@@ -620,6 +623,16 @@
         ${chips ? `<div class="chips">${esc(chips)}</div>` : ''}</div></div>`;
     }
 
+    function doneSection(a, dl, full) {
+      const shown = full ? dl.items : dl.items.slice(0, 3);
+      const more = full ? 0 : dl.total - shown.length;
+      const rows = shown.map((x) => `<div class="it">${esc(x.text)} <i class="when">${ago(Math.round(Date.now() / 1000 - x.at))}</i></div>`).join('');
+      return `<div class="sec don"><span class="ic" title="Done">✓</span><div style="min-width:0;flex:1"><b>Done · ${dl.total}</b>
+        ${full ? `<div class="donelist">${rows}</div>` : rows}
+        ${more > 0 ? `<div class="more">+${more} more</div>` : ''}
+        ${full && !dl.exhausted ? `<div class="moreb"><button class="linkbtn" data-backfill="${esc(a.sid)}">Load earlier work</button></div>` : ''}</div></div>`;
+    }
+
     // Where the agent stands (model-written from its recent exchanges): decisions pending, issues, completed items.
     function standBlock(a, full) {
       const st = a.stand;
@@ -630,7 +643,10 @@
         const shown = full ? items : items.slice(0, 1), more = full ? 0 : items.length - 1;
         return `<div class="sec ${cls}"><span class="ic" title="${label}">${icon}</span><div><b>${label}</b>${shown.map((x) => `<div class="it">${esc(x)}</div>`).join('')}${more > 0 ? `<div class="more">+${more} more</div>` : ''}</div></div>`;
       };
-      const html = sec('⚖', 'Decide', dec, 'dec') + sec('⚠', 'Issues', (st && st.issues) || [], 'iss') + sec('✓', 'Done', (st && st.done) || [], 'don');
+      const dl = a.doneLog && a.doneLog.items && a.doneLog.items.length ? a.doneLog : null;
+      // Done is a running ledger of the whole session; until it has filled in, fall back to the recent-window list.
+      const doneHtml = dl ? doneSection(a, dl, full) : sec('✓', 'Done', (st && st.done) || [], 'don');
+      const html = sec('⚖', 'Decide', dec, 'dec') + sec('⚠', 'Issues', (st && st.issues) || [], 'iss') + doneHtml;
       return `<div class="stand">${html || '<div class="muted">Nothing pending and no known issues.</div>'}</div>`;
     }
 
@@ -798,7 +814,7 @@
       stop: ['Interrupt this agent?', 'Sends Esc, which interrupts what it is doing right now. The conversation is kept.', 'Interrupt'],
     };
     async function post(path, body) {
-      const r = await fetch(`${ORCHESTRATOR_URL}${path}`, { method: path === '/decide' || path === '/action' || path === '/standing' ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+      const r = await fetch(`${ORCHESTRATOR_URL}${path}`, { method: ['/decide', '/action', '/standing', '/done/backfill'].includes(path) ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
       return r.json();
     }
 
@@ -817,6 +833,7 @@
         const res = await post('/decide', { id: btn.dataset.id, decision: btn.dataset.decide });
         toast(res.message || 'Done', res.ok ? 'info' : 'warn'); refreshTerminals(); return;
       }
+      if (btn && btn.dataset.backfill) { const r = await post('/done/backfill', { sid: btn.dataset.backfill }); toast(r.message || 'Loading earlier work…', r.ok ? 'info' : 'warn'); return; }
       if (btn && btn.dataset.convo) { openConversation(btn.dataset.convo, btn.dataset.title); return; }
       if (btn && btn.dataset.rawToggle) { const k = btn.dataset.rawToggle; rawOpen.has(k) ? rawOpen.delete(k) : rawOpen.add(k); refreshTerminals(); return; }
       if (btn && btn.dataset.delStanding) { await post('/standing/' + btn.dataset.delStanding); standingList = (await fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json())).standing; refreshTerminals(); return; }
