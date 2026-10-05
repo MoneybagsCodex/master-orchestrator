@@ -1066,11 +1066,10 @@
       const nodes = plansData.flatMap((p) => p.nodes || []);
       if (!nodes.length) return '';
       const now = Date.now() / 1000, bm = burndownModel(nodes, now), lm = laneModel(nodes, agents, now);
-      const head = `<div class="plan-h" data-toggle-viz><span>Velocity &amp; workload</span><span class="muted">${bm ? `${bm.done}/${bm.total} done` : ''} <svg class="i" aria-hidden="true"><use href="#i-${vizClosed ? 'right' : 'down'}"/></svg></span></div>`;
+      const head = `<div class="plan-h" data-toggle-viz><span>Burndown</span><span class="muted">${bm ? `${bm.done}/${bm.total} done` : ''} <svg class="i" aria-hidden="true"><use href="#i-${vizClosed ? 'right' : 'down'}"/></svg></span></div>`;
       if (vizClosed) return `<div class="plan viz" data-k="viz">${head}</div>`;
-      const vel = bm ? `${bm.perHour >= 0.05 ? bm.perHour.toFixed(1) : '0'} steps/hr over the last hour${bm.etaMin !== null ? `, about ${fmtAgo(bm.etaMin * 60)} to finish what is left at this pace` : ''}` : '';
       return `<div class="plan viz" data-k="viz">${head}
-        <div class="viz-sec"><h4>Burndown <span>${bm ? `${bm.remaining} remaining · ${esc(vel)}` : ''}</span></h4>${bm ? burndownSvg(bm) : '<div class="empty">No step timestamps yet.</div>'}
+        <div class="viz-sec"><h4>Plan progress <span>${bm ? `${bm.remaining} remaining` : ''}</span></h4>${bm ? burndownSvg(bm) : '<div class="empty">No step timestamps yet.</div>'}
           <div class="legend"><span style="--c:var(--success)"><i></i>done (cumulative)</span><span style="--c:var(--text-3)"><i></i>total scope</span><span style="--c:var(--warning)"><i></i>remaining</span></div></div></div>`;
     }
     window.__viz = { burndownModel, laneModel };   // exposed so the models can be tested with synthetic data
