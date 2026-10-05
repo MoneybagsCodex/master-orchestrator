@@ -412,6 +412,16 @@
     .ctxbar { flex: 1; height: 5px; background: var(--surface-inset); border-radius: var(--r-pill); overflow: hidden; min-width: 40px; box-shadow: inset 0 1px 2px rgba(var(--shade), .4); }
     .ctxbar i { display: block; height: 100%; background: linear-gradient(90deg, #1d9bd1, var(--info)); border-radius: var(--r-pill); }
     .ctxrow.warm .ctxbar i { background: linear-gradient(90deg, #d39a0b, var(--warning)); } .ctxrow.hot .ctxbar i { background: linear-gradient(90deg, #dc4a4a, var(--danger)); }
+    .cl, .cl-map { border: 1px solid var(--line); border-radius: var(--r-md); margin: 8px 0; overflow: hidden; background: var(--surface-2); }
+    .cl-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 9px 12px; cursor: pointer; flex-wrap: wrap; }
+    .cl-h:hover { background: rgba(var(--wash), .03); }
+    .cl-body { border-top: 1px solid var(--line); }
+    .cl-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 12px; font-size: var(--fs-md); line-height: 1.4; border-bottom: 1px solid var(--line); }
+    .cl-row:last-child { border-bottom: none; }
+    .cl-b { flex: none; min-width: 64px; font-size: var(--fs-xs); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-3); }
+    .cl-b.done { color: var(--success); } .cl-b.active { color: var(--info); } .cl-b.blocked, .cl-b.held { color: var(--danger); } .cl-b.decide { color: var(--warning); }
+    .cl-t { min-width: 0; overflow-wrap: anywhere; } .cl-n { color: var(--text-3); }
+    .cl-map .sp { margin: 0; border-radius: 0; border-left: 0; border-right: 0; }
     .orchself { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 14px; font-size: var(--fs-md); line-height: 1.45; flex: none; box-shadow: var(--sh-1), inset 0 1px 0 var(--hl); }
     #orchSlot:not(:empty) { padding: 10px 12px 0; flex: none; }
     .orchself .oh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -1078,7 +1088,7 @@
 
     // One plan per domain (game / orchestrator / UI). planData.nodes is every step across plans, for the per-agent helpers above;
     // plansData is the list of plans, each drawn as its own graph with its own open/closed state.
-    let planData = null, plansData = [], planClosed = new Set(), prevPlan = {};
+    let planData = null, plansData = [], planClosed = new Set(), prevPlan = {}, mapOpen = new Set();   // the dependency map is a secondary view, closed until asked for
     function planPanel(agents) { return plansData.map((p) => planPanelOne(agents, p)).join(''); }
     function planPanelOne(agents, pl) {
       if (!pl || !pl.nodes || !pl.nodes.length) return '';
@@ -1174,9 +1184,19 @@
             ${spOpen ? `<svg viewBox="0 0 ${width} ${height}" style="width:${width}px;max-width:100%"><defs><marker id="arr-${pl.id}-${sp.id}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${bandSvg}${edgesG.join('')}${treeG.join('')}${tops.map((n) => box(n, false)).join('') + kidsL.map((n) => box(n, true)).join('')}</svg>` : ''}</div>`;
           curKids = kidsOf; return out;
         }).join('');
+        // ---- Primary view: one section per concept, its steps listed down the page with a status badge ----
+        const BADGE = { done: ['done', '✓'], active: ['active', '▶'], todo: ['todo', '○'], blocked: ['blocked', '!'], decide: ['decide', '?'] };
+        const listHtml = subs.map((sp) => {
+          const sn = nodes.filter((n) => (subOf(n) || '__none') === sp.id); if (!sn.length) return '';
+          const dn = sn.filter((n) => n.st === 'done').length, pct = Math.round((dn / sn.length) * 100), key = pl.id + ':l:' + sp.id, open = !planClosed.has(key);
+          const rows = sn.map((n) => { const b = BADGE[n.held ? 'blocked' : n.st] || [n.st, '○'];
+            return `<div class="cl-row"><span class="cl-b ${n.held ? 'held' : n.st}" title="${esc(n.held ? 'waiting: blocked by ' + n.held.title : n.st)}">${b[1]} ${b[0]}</span><span class="cl-t">${esc(n.title)}${n.note && n.st !== 'done' ? `<span class="cl-n"> · ${esc(n.note)}</span>` : ''}</span></div>`; }).join('');
+          return `<div class="cl"><div class="cl-h" data-toggle-plan="${esc(key)}"><span class="sp-t"><b>${esc(sp.title)}</b>${sp.blurb ? `<span class="sp-b">${esc(sp.blurb)}</span>` : ''}</span><span class="muted"><span class="sp-n">${dn}/${sn.length} done</span><span class="bar sp-bar"><div style="width:${pct}%"></div></span> ${ic(open ? 'down' : 'right')}</span></div>${open ? `<div class="cl-body">${rows}</div>` : ''}</div>`;
+        }).join('');
+        const mapBlock = `<div class="cl-map"><div class="cl-h" data-toggle-map="${esc(pl.id)}"><span class="sp-t"><b>Dependency map</b><span class="sp-b">Steps as tiles by layer and date, with dependency lines</span></span><span class="muted">${ic(mapOpen.has(pl.id) ? 'down' : 'right')}</span></div>${mapOpen.has(pl.id) ? html : ''}</div>`;
         const dAll = nodes.filter((n) => n.st === 'done').length, decideG = nodes.filter((n) => n.st === 'decide'), blockedG = nodes.filter((n) => n.st === 'blocked'), heldG = nodes.filter((n) => n.held);
         return `<div class="plan"><div class="plan-h" data-toggle-plan="${esc(pl.id)}"><span>Plan: ${esc(pl.title)}</span><span class="muted">${dAll}/${nodes.length} done · ${subs.filter((x) => nodes.some((n) => (subOf(n) || '__none') === x.id)).length} sub-plans ${ic(planOpen ? 'down' : 'right')}</span></div>
-          ${planOpen ? html + blockedG.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldG.filter((h) => h.held === n).length ? ` — holding up ${heldG.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('') + decideG.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('') : ''}</div>`;
+          ${planOpen ? listHtml + mapBlock + blockedG.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldG.filter((h) => h.held === n).length ? ` — holding up ${heldG.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('') + decideG.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('') : ''}</div>`;
       }
       const boxes = top.map((n) => box(n, false)).join('') + kids.map((n) => box(n, true)).join('');
       const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide'), blockedN = nodes.filter((n) => n.st === 'blocked'), heldN = nodes.filter((n) => n.held);
@@ -1351,6 +1371,7 @@
       }
       if (btn && btn.id === 'enableAlerts') { Notification.requestPermission().then((p) => toast(p === 'granted' ? 'Desktop alerts on' : 'Desktop alerts blocked by the browser', 'info')); return; }
       { if (e.target.closest('[data-toggle-viz]')) { vizClosed = !vizClosed; refreshTerminals(); return; } }
+      { const tm = e.target.closest('[data-toggle-map]'); if (tm) { const id = tm.dataset.toggleMap; if (mapOpen.has(id)) mapOpen.delete(id); else mapOpen.add(id); refreshTerminals(); return; } }
       { const tp = e.target.closest('[data-toggle-plan]'); if (tp) { const id = tp.dataset.togglePlan; if (planClosed.has(id)) planClosed.delete(id); else planClosed.add(id); refreshTerminals(); return; } }
       if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
       if (btn || e.target.closest('input')) return;
