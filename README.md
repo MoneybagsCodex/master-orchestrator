@@ -1,3 +1,5 @@
+> **Setup and running (both repos):** see `agent-orchestrator/SETUP.md`.
+
 # Cockpit Orchestrator
 
 Voice-first orchestration dashboard for multi-agent AI systems.
