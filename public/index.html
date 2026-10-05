@@ -324,6 +324,15 @@
     .plan .pn.decide rect { stroke: var(--warning); fill: color-mix(in srgb, var(--warning) 12%, var(--surface-2)); stroke-dasharray: 4 2; }
     .plan .pn.held rect { stroke: var(--text-3); stroke-dasharray: 2 3; fill: var(--surface-inset); } .plan .pn.held text { fill: var(--text-2); }
     @keyframes planpulse { 50% { stroke-opacity: .35; } }
+    .plan .sp { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+    .plan .sp:first-of-type { border-top: 0; padding-top: 2px; }
+    .plan .sp-h { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; border-radius: 4px; flex-wrap: wrap; }
+    .plan .sp-t { display: flex; flex-direction: column; min-width: 0; } .plan .sp-t b { font-size: var(--fs-sm); font-weight: 650; color: var(--text); }
+    .plan .sp-b { font-size: 11px; color: var(--text-3); } .plan .sp-h:hover .sp-t b { color: var(--strong); }
+    .plan .sp-h .muted { display: inline-flex; align-items: center; gap: 8px; } .plan .sp-n { font-variant-numeric: tabular-nums; }
+    .plan .sp-bar { width: 64px; display: inline-block; }
+    .plan .pb { fill: rgba(var(--wash), .03); } .plan .pb.alt { fill: rgba(var(--wash), .06); }
+    .plan .pbl { fill: var(--text-2); font-size: 10px; font-weight: 650; font-family: var(--font); } .plan .pbs { fill: var(--text-3); font-size: 8.5px; font-family: var(--font); }
     .plan .pn.flash rect { animation: planflash 1.4s ease-out 1; }
     @keyframes planflash { 0% { stroke-width: 5; filter: brightness(2.2); } 100% { stroke-width: 1.5; filter: none; } }
     .plan .pe { fill: none; stroke: var(--idle-line); stroke-width: 1.2; } .plan .pe.bad { stroke: var(--danger); stroke-dasharray: 4 3; }
@@ -1094,13 +1103,60 @@
       const tree = top.flatMap((n) => { const ks = kidsOf(n); if (!ks.length) return []; const rx = n.x + 7;
         return [`<path class="pt" d="M${rx},${n.y + H} V${ks[ks.length - 1].y + CH / 2}"/>`, ...ks.map((k) => `<path class="pt" d="M${rx},${k.y + CH / 2} H${k.x}"/>`)]; });
       const clip = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
+      let curKids = kidsOf;   // nested-step lookup; the grouped layout swaps in a per-sub-plan version
       const box = (n, kid) => {
-        const w = kid ? CW : W, h = kid ? CH : H, nk = kidsOf(n).length;
+        const w = kid ? CW : W, h = kid ? CH : H, nk = curKids(n).length;
         const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
         const who = ownerOf(n), meta = [n.held ? 'held by ' + n.held.id : n.st, nk ? `${nk} sub` : '', clock(n)].filter(Boolean).join(' · ');
         return `<g class="pn ${n.held ? 'held' : n.st}${kid ? ' kid' : ''}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}${kid ? ' · sub-agent step' : ''}</title><rect width="${w}" height="${h}" rx="${kid ? 5 : 6}"/>
           <text x="6" y="${kid ? 11 : 14}">${esc(clip(mark + n.title, kid ? 16 : 18))}</text><text class="tag" x="6" y="${kid ? 21 : 26}">${esc(clip(meta, kid ? 22 : 25))}</text></g>`;
       };
+      if (pl.subplans && pl.subplans.length) {
+        // ---- Grouped plan: sub-plans (layers) down the page, each drawn as a graph split into milestone bands (dates, then Future) ----
+        const dateKey = (t) => { const d = new Date(t * 1000); return d.toLocaleString('en-US', { month: 'short' }).toLowerCase() + '-' + String(d.getDate()).padStart(2, '0'); };
+        const keyTitle = (k) => { const m = k.match(/^([a-z]{3})-(\d{2})$/); return m ? m[1][0].toUpperCase() + m[1].slice(1) + ' ' + Number(m[2]) : k; };
+        const msKey = (n) => n.milestone || (n.st === 'todo' && !n.startedAt ? 'future' : dateKey(n.startedAt || n.createdAt || n.statusAt || Date.now() / 1000));
+        const base = (pl.milestones || []).filter((m) => m.id !== 'future');
+        const extra = [...new Set(nodes.map(msKey))].filter((k) => k !== 'future' && !base.some((m) => m.id === k));
+        const early = (k) => Math.min(...nodes.filter((n) => msKey(n) === k).map((n) => n.startedAt || n.createdAt || 9e12));
+        extra.sort((a, b) => early(a) - early(b));
+        const mss = [...base.map((m) => ({ id: m.id, title: m.title })), ...extra.map((k) => ({ id: k, title: keyTitle(k) })), { id: 'future', title: ((pl.milestones || []).find((m) => m.id === 'future') || {}).title || 'Future' }];
+        const subOf = (n, seen = new Set()) => { if (n.sub && pl.subplans.some((x) => x.id === n.sub)) return n.sub; if (seen.has(n.id)) return ''; seen.add(n.id); for (const d of n.deps) { const p = byId[d]; const r = p && subOf(p, seen); if (r) return r; } return ''; };
+        const subs = pl.subplans.map((x) => ({ ...x })); if (nodes.some((n) => !subOf(n))) subs.push({ id: '__none', title: 'Ungrouped', blurb: 'Steps with no sub-plan yet' });
+        const LBL = 54, BPAD = 5, EMPTY = 24;
+        const clip2 = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
+        const html = subs.map((sp) => {
+          const sn = nodes.filter((n) => (subOf(n) || '__none') === sp.id); if (!sn.length && sp.id === '__none') return '';
+          const loc = Object.fromEntries(sn.map((n) => [n.id, n]));
+          const ld = (n, seen = new Set()) => { if (n.ld !== undefined) return n.ld; if (seen.has(n.id)) return 0; seen.add(n.id); const ds = n.deps.filter((d) => loc[d]); return (n.ld = ds.length ? 1 + Math.max(...ds.map((d) => ld(loc[d], seen))) : 0); };
+          sn.forEach((n) => { delete n.ld; }); sn.forEach((n) => ld(n));
+          const kidL = (n) => !!(n.parent && loc[n.parent] && n.parent !== n.id);
+          const tops = sn.filter((n) => !kidL(n)), kidsL = sn.filter(kidL), kidsOfL = (n) => kidsL.filter((k) => k.parent === n.id);
+          curKids = kidsOfL;
+          const ncol = Math.max(0, ...tops.map((n) => n.ld)) + 1, bh = (n) => H + kidsOfL(n).length * (CH + CGY);
+          const width = LBL + PAD * 2 + ncol * W + (ncol - 1) * GX;
+          let y = BPAD; const bands = [];
+          mss.forEach((m) => {
+            const inb = tops.filter((n) => msKey(n) === m.id); const colsB = {}; inb.forEach((n) => (colsB[n.ld] = colsB[n.ld] || []).push(n));
+            const colHB = (c) => c.reduce((t, n) => t + bh(n), 0) + (c.length - 1) * GY;
+            const h = inb.length ? Math.max(...Object.values(colsB).map(colHB)) + BPAD * 2 : EMPTY;
+            Object.entries(colsB).forEach(([ci, c]) => { let yy = y + BPAD; c.forEach((n) => { n.x = LBL + PAD + ci * (W + GX); n.y = yy; kidsOfL(n).forEach((k, i) => { k.x = n.x + IND; k.y = n.y + H + CGY + i * (CH + CGY); }); yy += bh(n) + GY; }); });
+            const all = sn.filter((n) => msKey(n) === m.id); bands.push({ m, y, h, n: all.length, done: all.filter((n) => n.st === 'done').length }); y += h;
+          });
+          const height = y + BPAD;
+          const bandSvg = bands.map((b, i) => `<rect class="pb${i % 2 ? ' alt' : ''}" x="0" y="${b.y}" width="${width}" height="${b.h}"/><text class="pbl" x="6" y="${b.y + (b.n ? 14 : 15)}">${esc(b.m.title)}</text>${b.n ? `<text class="pbs" x="6" y="${b.y + 25}">${b.done}/${b.n} done</text>` : `<text class="pbs" x="${LBL + PAD}" y="${b.y + 15}">${b.m.id === 'future' ? 'nothing planned yet' : 'none'}</text>`}`).join('');
+          const edgesG = tops.flatMap((n) => n.deps.filter((d) => loc[d] && !kidL(loc[d])).map((d) => { const a = loc[d]; const x1 = a.x + W, y1 = a.y + H / 2, x2 = n.x, y2 = n.y + H / 2, mx = (x1 + x2) / 2;
+            return `<path class="pe ${a.st === 'blocked' ? 'bad' : ''}" d="M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}" marker-end="url(#arr-${pl.id}-${sp.id})"/>`; }));
+          const treeG = tops.flatMap((n) => { const ks = kidsOfL(n); if (!ks.length) return []; const rx = n.x + 7; return [`<path class="pt" d="M${rx},${n.y + H} V${ks[ks.length - 1].y + CH / 2}"/>`, ...ks.map((k) => `<path class="pt" d="M${rx},${k.y + CH / 2} H${k.x}"/>`)]; });
+          const spOpen = !planClosed.has(pl.id + ':' + sp.id), dn = sn.filter((n) => n.st === 'done').length, pct = sn.length ? Math.round((dn / sn.length) * 100) : 0;
+          const out = `<div class="sp"><div class="sp-h" data-toggle-plan="${esc(pl.id + ':' + sp.id)}"><span class="sp-t"><b>${esc(sp.title)}</b>${sp.blurb ? `<span class="sp-b">${esc(sp.blurb)}</span>` : ''}</span><span class="muted"><span class="sp-n">${dn}/${sn.length} done</span><span class="bar sp-bar"><div style="width:${pct}%"></div></span>${ic(spOpen ? 'down' : 'right')}</span></div>
+            ${spOpen ? `<svg viewBox="0 0 ${width} ${height}" style="width:${width}px;max-width:100%"><defs><marker id="arr-${pl.id}-${sp.id}" viewBox="0 0 6 6" refX="5" refY="3" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L6,3 L0,6 z" fill="#475569"/></marker></defs>${bandSvg}${edgesG.join('')}${treeG.join('')}${tops.map((n) => box(n, false)).join('') + kidsL.map((n) => box(n, true)).join('')}</svg>` : ''}</div>`;
+          curKids = kidsOf; return out;
+        }).join('');
+        const dAll = nodes.filter((n) => n.st === 'done').length, decideG = nodes.filter((n) => n.st === 'decide'), blockedG = nodes.filter((n) => n.st === 'blocked'), heldG = nodes.filter((n) => n.held);
+        return `<div class="plan"><div class="plan-h" data-toggle-plan="${esc(pl.id)}"><span>Plan: ${esc(pl.title)}</span><span class="muted">${dAll}/${nodes.length} done · ${subs.filter((x) => nodes.some((n) => (subOf(n) || '__none') === x.id)).length} sub-plans ${ic(planOpen ? 'down' : 'right')}</span></div>
+          ${planOpen ? html + blockedG.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldG.filter((h) => h.held === n).length ? ` — holding up ${heldG.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('') + decideG.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('') : ''}</div>`;
+      }
       const boxes = top.map((n) => box(n, false)).join('') + kids.map((n) => box(n, true)).join('');
       const done = nodes.filter((n) => n.st === 'done').length, decide = nodes.filter((n) => n.st === 'decide'), blockedN = nodes.filter((n) => n.st === 'blocked'), heldN = nodes.filter((n) => n.held);
       return `<div class="plan"><div class="plan-h" data-toggle-plan="${esc(pl.id)}"><span>Plan: ${esc(pl.title)}</span><span class="muted">${done}/${nodes.length} done ${ic(planOpen ? 'down' : 'right')}</span></div>
