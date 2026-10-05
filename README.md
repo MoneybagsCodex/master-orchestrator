@@ -50,3 +50,8 @@ http://localhost:4000
 - **Cockpit UI**: React-based dashboard with real-time polling
 - **Orchestrator Backend**: Executes workflows with agent routing and state management
 - **API Bridge**: Express server connects UI to orchestrator
+
+
+---
+
+Developed by Joshua Minton. Copyright © 2026 Joshua Minton. Property of Joshua Minton; all rights reserved.
