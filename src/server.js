@@ -7,12 +7,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const app = express();
-const PORT = 4000;
+const PORT = Number(process.env.PORT ?? 4000);
 const ORCHESTRATOR_URL = process.env.ORCHESTRATOR_URL ?? 'http://localhost:3003';
 const BRIDGE_URL = process.env.BRIDGE_URL ?? 'http://localhost:3002';
 
 app.use(express.json());
 app.use(express.static(join(__dirname, '../public')));
+
+// The page reads the orchestrator address from here so a non-default ORCHESTRATOR_URL works in the browser too.
+app.get('/orch-url.js', (req, res) => res.type('js').send(`window.ORCH_URL = ${JSON.stringify(ORCHESTRATOR_URL)};`));
 
 // Health check
 app.get('/api/health', (req, res) => {

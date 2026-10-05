@@ -624,7 +624,8 @@
     </div>
   </div>
 
-  <script>
+  <script src="/orch-url.js"></script>
+<script>
     const messageInput = document.getElementById('messageInput');
     const sendBtn = document.getElementById('sendBtn');
     const stopBtn = document.getElementById('stopBtn');
@@ -644,7 +645,7 @@
     }
     const terminalsContainer = document.getElementById('terminalsContainer');
 
-    const ORCHESTRATOR_URL = 'http://localhost:3003';
+    const ORCHESTRATOR_URL = window.ORCH_URL || 'http://localhost:3003';
     // Terminal list comes via the orchestrator, which merges in cockpit labels (older bridges lack them).
     const BRIDGE_URL = ORCHESTRATOR_URL;
 
