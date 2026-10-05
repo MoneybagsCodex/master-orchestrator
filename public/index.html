@@ -412,6 +412,10 @@
     .ctxbar { flex: 1; height: 5px; background: var(--surface-inset); border-radius: var(--r-pill); overflow: hidden; min-width: 40px; box-shadow: inset 0 1px 2px rgba(var(--shade), .4); }
     .ctxbar i { display: block; height: 100%; background: linear-gradient(90deg, #1d9bd1, var(--info)); border-radius: var(--r-pill); }
     .ctxrow.warm .ctxbar i { background: linear-gradient(90deg, #d39a0b, var(--warning)); } .ctxrow.hot .ctxbar i { background: linear-gradient(90deg, #dc4a4a, var(--danger)); }
+    .orchself { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 14px; font-size: var(--fs-md); line-height: 1.45; flex: none; box-shadow: var(--sh-1), inset 0 1px 0 var(--hl); }
+    .orchself .oh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .orchself .oh b.t { font-weight: 600; } .orchself .oh .mdl { color: var(--text-3); font-size: var(--fs-xs); } .orchself .oh .cbtn { margin-left: auto; }
+    .orchself .tok.sub { margin-top: 2px; }
     .tok { font-size: var(--fs-xs); color: var(--text-3); margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 2px 12px; }
     .tok b { color: var(--text-2); font-weight: 600; }
     .tok .ctx.hot, .tok .ctx.hot b { color: var(--warning); font-weight: 600; }
@@ -887,6 +891,18 @@
       return `<div class="stepchip ${cur.status}" title="${esc(cur.title)}"><b>${icon} ${esc(cur.title)}</b><span data-k="n:${esc(a.sid)}:step" data-n>step ${done + 1} of ${mine.length} · ${cur.status}</span></div>`;
     }
 
+    // The orchestrator's own token burn, same layout as an agent's token line: cumulative and per-turn side by side, context against the auto-compact line.
+    function orchCard(o) {
+      if (!o) return '';
+      const c = o.context, pct = c.pct === null ? 0 : Math.min(100, c.pct), usd = (n) => '$' + (n >= 1 ? n.toFixed(2) : n.toFixed(3));
+      const lt = o.lastTurn, cm = o.compactions;
+      return `<div class="orchself" title="The orchestrator's own usage, from its logged turns. Dollar figures are estimates from token counts (priced models only: ${o.pricedModel ? 'this one is' : 'this one is NOT, so Haiku rates are used'}).">
+        <div class="oh"><b class="t">Orchestrator (me)</b><span class="mdl">${esc(String(o.model || '').replace('claude-', '').replace(/-\d{8}$/, ''))}</span>${o.compacting ? '<span class="mdl">compacting…</span>' : ''}<button class="cbtn" data-orch-compact title="Compact the orchestrator's conversation now">${ic('fold')} Compact</button></div>
+        <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}" title="What the orchestrator re-reads on every turn. At the line it compacts itself when idle."><span class="ctxl">context <b data-k="o:ctx" data-n>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)} auto-compact` : ' (auto-compact off)'}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
+        <div class="tok" title="Cumulative over ${o.turns} logged turns. Input includes cache writes; cache read is the re-read conversation. Rate is the last 60 minutes."><span>total in <b data-k="o:in" data-n>${fmtTok(o.cumulative.input)}</b></span><span>out <b data-k="o:out" data-n>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b data-k="o:cr" data-n>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b data-k="o:hr" data-n>${fmtTok(o.perHour.tokens)}</b>/hr</span><span><b>${usd(o.cumulative.usd)}</b> total</span><span>${usd(o.perHour.usd)} last hour</span></div>
+        <div class="tok sub">${lt ? `<span>last turn: in <b data-k="o:lin" data-n>${fmtTok(lt.input)}</b></span><span>out <b data-k="o:lout" data-n>${fmtTok(lt.output)}</b></span><span>cache read <b data-k="o:lcr" data-n>${fmtTok(lt.cacheRead)}</b></span><span><b>${usd(lt.usd)}</b></span>` : '<span>no turns logged yet</span>'}<span>avg ${usd(o.avgTurnUsdLastHour)}/turn this hour</span><span>re-read ${usd(c.rereadUsdPerTurn)}/turn</span><span>${cm.count} compaction${cm.count === 1 ? '' : 's'}${cm.last ? `, last ${fmtTok(cm.last.pre)} → ${fmtTok(cm.last.post)} ${ago(Math.round(Math.max(0, Date.now() / 1000 - cm.last.at)))}` : ''}</span></div>
+      </div>`;
+    }
     function fleetBar(st, agents) {
       const n = (f) => agents.filter(f).length, working = n((a) => a.state === 'WORKING'), idle = n((a) => a.state === 'IDLE'), blocked = n((a) => a.state === 'BLOCKED');
       const over = agents.filter((a) => a.tokens && a.tokens.context > ctxThreshold), needs = (st.needsYou || []).length;
@@ -1255,7 +1271,7 @@
         if (typing) return;
         const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
         const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
+        terminalsContainer.innerHTML = fleetBar(st, agents) + orchCard(st.orchestrator) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
           + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         paintDiff(terminalsContainer);
         for (const sid of rawOpen) {
@@ -1302,6 +1318,11 @@
     });
     terminalsContainer.addEventListener('click', async (e) => {
       const btn = e.target.closest('button');
+      if (btn && btn.hasAttribute('data-orch-compact')) {
+        if (!(await confirmDialog('Compact the orchestrator?', 'Runs /compact on its conversation: older turns are replaced by a summary and this cannot be undone. It does this itself past the context line.', 'Compact'))) return;
+        const r = await fetch(`${ORCHESTRATOR_URL}/orchestrator/compact`, { method: 'POST' }).then((x) => x.json()).catch(() => ({ ok: false, message: 'Server not reachable' }));
+        toast(r.ok ? 'Compacting the orchestrator…' : (r.message || 'Could not compact'), r.ok ? 'info' : 'warn'); refreshTerminals(); return;
+      }
       if (btn && btn.dataset.act) {
         const card = btn.closest('.agent-card'); const a = (lastStatus?.agents || []).find((x) => x.sid === btn.dataset.sid);
         const [title, body, ok] = ACTION_TEXT[btn.dataset.act];
