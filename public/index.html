@@ -1276,7 +1276,7 @@
         if (typing) return;
         const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
         const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
+        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
           + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         paintDiff(terminalsContainer);
         for (const sid of rawOpen) {
