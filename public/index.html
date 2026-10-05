@@ -1117,13 +1117,20 @@
       const tree = top.flatMap((n) => { const ks = kidsOf(n); if (!ks.length) return []; const rx = n.x + 7;
         return [`<path class="pt" d="M${rx},${n.y + H} V${ks[ks.length - 1].y + CH / 2}"/>`, ...ks.map((k) => `<path class="pt" d="M${rx},${k.y + CH / 2} H${k.x}"/>`)]; });
       const clip = (t, k) => (t.length > k ? t.slice(0, k - 1) + '…' : t);
+      // The tile shows the step's concept: its title over two lines (status and time live in the hover text and the colour).
+      const wrapTitle = (t, k) => {
+        const words = t.split(/\s+/); let l1 = '';
+        while (words.length && (l1 + ' ' + words[0]).trim().length <= k) l1 = (l1 + ' ' + words.shift()).trim();
+        if (!l1) { l1 = words[0].slice(0, k); words[0] = words[0].slice(k); if (!words[0]) words.shift(); }
+        return words.length ? [l1, clip(words.join(' '), k)] : [l1];
+      };
       let curKids = kidsOf;   // nested-step lookup; the grouped layout swaps in a per-sub-plan version
       const box = (n, kid) => {
         const w = kid ? CW : W, h = kid ? CH : H, nk = curKids(n).length;
         const mark = n.st === 'done' ? '✓ ' : n.st === 'decide' ? '? ' : n.st === 'blocked' ? '! ' : '';
         const who = ownerOf(n), meta = [n.held ? 'held by ' + n.held.id : n.st, nk ? `${nk} sub` : '', clock(n)].filter(Boolean).join(' · ');
-        return `<g class="pn ${n.held ? 'held' : n.st}${kid ? ' kid' : ''}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}${kid ? ' · sub-agent step' : ''}</title><rect width="${w}" height="${h}" rx="${kid ? 5 : 6}"/>
-          <text x="6" y="${kid ? 11 : 14}">${esc(clip(mark + n.title, kid ? 16 : 18))}</text><text class="tag" x="6" y="${kid ? 21 : 26}">${esc(clip(meta, kid ? 22 : 25))}</text></g>`;
+        return `<g class="pn ${n.held ? 'held' : n.st}${kid ? ' kid' : ''}${n.flash ? ' flash' : ''}" transform="translate(${n.x},${n.y})"><title>${esc(n.title)}${n.note ? ' — ' + esc(n.note) : ''} (${esc(meta)}) [${n.held ? 'waiting: blocked by ' + n.held.title : n.st}]${who ? ' · owner: ' + esc(who) : ''}${kid ? ' · sub-agent step' : ''}</title><rect width="${w}" height="${h}" rx="${kid ? 5 : 6}"/>
+          ${wrapTitle(mark + n.title, kid ? 16 : 19).map((ln, i) => `<text x="6" y="${(kid ? 10 : 13) + i * (kid ? 10 : 12)}">${esc(ln)}</text>`).join('')}</g>`;
       };
       if (pl.subplans && pl.subplans.length) {
         // ---- Grouped plan: sub-plans (layers) down the page, each drawn as a graph split into milestone bands (dates, then Future) ----
