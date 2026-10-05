@@ -1,5 +1,5 @@
 {
-  "name": "cockpit-orchestrator",
+  "name": "master-orchestrator",
   "version": "0.1.0",
   "description": "Cockpit UI for the Agent Orchestrator",
   "type": "module",

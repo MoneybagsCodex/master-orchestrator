@@ -26,7 +26,7 @@ npm run server
 
 ### Terminal 2: Start the Cockpit UI
 ```bash
-cd ~/projects/cockpit-orchestrator
+cd ~/projects/master-orchestrator
 npm run dev
 ```
 
