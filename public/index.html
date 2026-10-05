@@ -877,7 +877,7 @@
         : t.context ? `<div class="ctxrow ${over ? 'hot' : pct >= 75 ? 'warm' : ''}" title="Size of the conversation the agent re-reads on every step (latest call: input + cache)"><span class="ctxl">${over ? ic('alert') + ' ' : ''}context <b data-k="n:${esc(a.sid)}:ctx" data-n>${fmtTok(t.context)}</b> / ${fmtTok(ctxThreshold)}</span><span class="ctxbar"><i style="width:${pct}%"></i></span>${over ? `<button class="cbtn" data-act="compact" data-sid="${esc(a.sid)}" title="Compact its context">${ic('fold')} Compact</button>` : ''}</div>` : '';
       return ctx + `<div class="tok" title="From the agent's own transcript. Input includes cache writes; cache reads are the re-read conversation, counted in total. Rate is the last 60 minutes.">
         <span>in <b data-k="n:${esc(a.sid)}:in" data-n>${fmtTok(t.input)}</b></span><span>out <b data-k="n:${esc(a.sid)}:out" data-n>${fmtTok(t.output)}</b></span><span>cache read <b data-k="n:${esc(a.sid)}:cr" data-n>${fmtTok(t.cacheRead)}</b></span>
-        <span>total <b data-k="n:${esc(a.sid)}:tot" data-n>${fmtTok(t.total)}</b></span><span><b data-k="n:${esc(a.sid)}:hr" data-n>${fmtTok(t.perHour)}</b>/hr</span>${a.state === 'WORKING' ? `<span>this turn <b data-k="n:${esc(a.sid)}:turn" data-n>${fmtTok(t.turnTotal)}</b></span>` : ''}</div>`;
+        <span>total <b data-k="n:${esc(a.sid)}:tot" data-n>${fmtTok(t.total)}</b></span></div>`;
     }
 
     function stepChip(a) {
@@ -895,12 +895,11 @@
     function orchCard(o) {
       if (!o) return '';
       const c = o.context, pct = c.pct === null ? 0 : Math.min(100, c.pct), usd = (n) => '$' + (n >= 1 ? n.toFixed(2) : n.toFixed(3));
-      const lt = o.lastTurn, cm = o.compactions;
-      return `<div class="orchself" title="The orchestrator's own usage, from its logged turns. Dollar figures are estimates from token counts (priced models only: ${o.pricedModel ? 'this one is' : 'this one is NOT, so Haiku rates are used'}).">
-        <div class="oh"><b class="t">Orchestrator (me)</b><span class="mdl">${esc(String(o.model || '').replace('claude-', '').replace(/-\d{8}$/, ''))}</span>${o.compacting ? '<span class="mdl">compacting…</span>' : ''}<button class="cbtn" data-orch-compact title="Compact the orchestrator's conversation now">${ic('fold')} Compact</button></div>
-        <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}" title="What the orchestrator re-reads on every turn. At the line it compacts itself when idle."><span class="ctxl">context <b data-k="o:ctx" data-n>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)} auto-compact` : ' (auto-compact off)'}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
-        <div class="tok" title="Cumulative over ${o.turns} logged turns. Input includes cache writes; cache read is the re-read conversation. Rate is the last 60 minutes."><span>total in <b data-k="o:in" data-n>${fmtTok(o.cumulative.input)}</b></span><span>out <b data-k="o:out" data-n>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b data-k="o:cr" data-n>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b data-k="o:hr" data-n>${fmtTok(o.perHour.tokens)}</b>/hr</span><span><b>${usd(o.cumulative.usd)}</b> total</span><span>${usd(o.perHour.usd)} last hour</span></div>
-        <div class="tok sub">${lt ? `<span>last turn: in <b data-k="o:lin" data-n>${fmtTok(lt.input)}</b></span><span>out <b data-k="o:lout" data-n>${fmtTok(lt.output)}</b></span><span>cache read <b data-k="o:lcr" data-n>${fmtTok(lt.cacheRead)}</b></span><span><b>${usd(lt.usd)}</b></span>` : '<span>no turns logged yet</span>'}<span>avg ${usd(o.avgTurnUsdLastHour)}/turn this hour</span><span>re-read ${usd(c.rereadUsdPerTurn)}/turn</span><span>${cm.count} compaction${cm.count === 1 ? '' : 's'}${cm.last ? `, last ${fmtTok(cm.last.pre)} → ${fmtTok(cm.last.post)} ${ago(Math.round(Math.max(0, Date.now() / 1000 - cm.last.at)))}` : ''}</span></div>
+      const state = o.compacting ? 'COMPACTING' : o.busy ? 'WORKING' : 'IDLE';
+      return `<div class="orchself" title="The orchestrator's own usage. Dollar figures are estimates from token counts (${o.pricedModel ? 'priced model' : 'unpriced model, Haiku rates used'}). It compacts itself at the context line.">
+        <div class="oh"><b class="t">Orchestrator (me)</b><span class="mdl">${state}</span><button class="cbtn" data-orch-compact title="Compact the orchestrator's conversation now">${ic('fold')} Compact</button></div>
+        <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}"><span class="ctxl">context <b data-k="o:ctx" data-n>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)}` : ''}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
+        <div class="tok"><span>in <b data-k="o:in" data-n>${fmtTok(o.cumulative.input)}</b></span><span>out <b data-k="o:out" data-n>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b data-k="o:cr" data-n>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b>${usd(o.perHour.usd)}</b> last hour</span></div>
       </div>`;
     }
     function fleetBar(st, agents) {
@@ -1072,9 +1071,7 @@
       const vel = bm ? `${bm.perHour >= 0.05 ? bm.perHour.toFixed(1) : '0'} steps/hr over the last hour${bm.etaMin !== null ? `, about ${fmtAgo(bm.etaMin * 60)} to finish what is left at this pace` : ''}` : '';
       return `<div class="plan viz" data-k="viz">${head}
         <div class="viz-sec"><h4>Burndown <span>${bm ? `${bm.remaining} remaining · ${esc(vel)}` : ''}</span></h4>${bm ? burndownSvg(bm) : '<div class="empty">No step timestamps yet.</div>'}
-          <div class="legend"><span style="--c:var(--success)"><i></i>done (cumulative)</span><span style="--c:var(--text-3)"><i></i>total scope</span><span style="--c:var(--warning)"><i></i>remaining</span></div></div>
-        <div class="viz-sec"><h4>Swimlanes <span>${lm.lanes.length} lane${lm.lanes.length === 1 ? '' : 's'} · hover a bar for its full title</span></h4>${lanesSvg(lm)}
-          <div class="legend"><span style="--c:var(--success)"><i></i>done</span><span style="--c:var(--info)"><i></i>active</span><span style="--c:var(--danger)"><i></i>blocked</span><span style="--c:var(--warning)"><i></i>needs decision</span><span style="--c:var(--idle-line)"><i></i>queued</span></div></div></div>`;
+          <div class="legend"><span style="--c:var(--success)"><i></i>done (cumulative)</span><span style="--c:var(--text-3)"><i></i>total scope</span><span style="--c:var(--warning)"><i></i>remaining</span></div></div></div>`;
     }
     window.__viz = { burndownModel, laneModel };   // exposed so the models can be tested with synthetic data
 
