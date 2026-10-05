@@ -916,6 +916,7 @@
       return `<div class="orchself" title="The orchestrator's own usage. Dollar figures are estimates from token counts (${o.pricedModel ? 'priced model' : 'unpriced model, Haiku rates used'}). It compacts itself at the context line.">
         <div class="oh"><b class="t">Orchestrator (me)</b><span class="mdl">${state}</span><button class="cbtn" data-orch-compact title="Compact the orchestrator's conversation now">${ic('fold')} Compact</button></div>
         <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}"><span class="ctxl">context <b>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)}` : ''}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
+        <div class="thresh">Flag agents whose context exceeds <select id="ctxThresh">${[100000, 150000, 200000, 300000, 500000].map((v) => `<option value="${v}" ${v === ctxThreshold ? 'selected' : ''}>${fmtTok(v)}</option>`).join('')}</select> tokens</div>
         <div class="tok"><span>in <b>${fmtTok(o.cumulative.input)}</b></span><span>out <b>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b>${usd(o.perHour.usd)}</b> last hour</span></div>
       </div>`;
     }
@@ -1214,15 +1215,6 @@
         ${blockedN.map((n) => `<div class="pdec bad">${ic('ban')}<span>Blocked: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}${heldN.filter((h) => h.held === n).length ? ` — holding up ${heldN.filter((h) => h.held === n).length} step(s)` : ''}</span></div>`).join('')}${decide.map((n) => `<div class="pdec">${ic('help')}<span>To decide: ${esc(n.title)}${n.note ? ' · ' + esc(n.note) : ''}</span></div>`).join('')}` : ''}</div>`;
     }
 
-    function summaryStrip(st) {
-      const sm = st.summary || { total: 0, waiting: 0, replied: 0, stalled: 0, held: 0 };
-      const pct = sm.total ? Math.round((sm.replied / sm.total) * 100) : 0;
-      return `<div class="mission"><div class="mission-line"><b>Messages to agents, last hour</b>
-        <span>${sm.replied} of ${sm.total} answered · ${sm.waiting} waiting${sm.held ? ` · ${sm.held} on hold` : ''}${sm.stalled ? ` · ${sm.stalled} problem${sm.stalled > 1 ? 's' : ''}` : ''}</span></div>
-        <div class="bar"><div style="width:${pct}%"></div></div>
-        <div class="thresh">Flag agents whose context exceeds <select id="ctxThresh">${[100000, 150000, 200000, 300000, 500000].map((v) => `<option value="${v}" ${v === ctxThreshold ? 'selected' : ''}>${fmtTok(v)}</option>`).join('')}</select> tokens</div></div>`;
-    }
-
     let standingList = [];
     function standingPanel() {
       return `<div class="standing"><div class="standing-h" data-toggle-standing>Standing instructions · ${standingList.length} <span class="muted">${ic(standingOpen ? 'down' : 'right')}</span></div>
@@ -1297,7 +1289,7 @@
     async function refreshTerminals() {
       try {
         const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plans`).then((r) => r.json()).catch(() => ({}))]);
-        lastStatus = st; { const slot = document.getElementById('orchSlot'); if (slot) slot.innerHTML = orchCard(st.orchestrator); } plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
+        lastStatus = st; { const slot = document.getElementById('orchSlot'); if (slot && document.activeElement && document.activeElement.id !== 'ctxThresh') slot.innerHTML = orchCard(st.orchestrator); } plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
         const agents = st.agents || [];
         if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
@@ -1305,7 +1297,7 @@
         if (typing) return;
         const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
         const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + summaryStrip(st)
+        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents)
           + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         paintDiff(terminalsContainer);
         for (const sid of rawOpen) {
