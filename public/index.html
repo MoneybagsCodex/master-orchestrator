@@ -413,6 +413,7 @@
     .ctxbar i { display: block; height: 100%; background: linear-gradient(90deg, #1d9bd1, var(--info)); border-radius: var(--r-pill); }
     .ctxrow.warm .ctxbar i { background: linear-gradient(90deg, #d39a0b, var(--warning)); } .ctxrow.hot .ctxbar i { background: linear-gradient(90deg, #dc4a4a, var(--danger)); }
     .orchself { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md); padding: 10px 14px; font-size: var(--fs-md); line-height: 1.45; flex: none; box-shadow: var(--sh-1), inset 0 1px 0 var(--hl); }
+    #orchSlot:not(:empty) { padding: 10px 12px 0; flex: none; }
     .orchself .oh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .orchself .oh b.t { font-weight: 600; } .orchself .oh .mdl { color: var(--text-3); font-size: var(--fs-xs); } .orchself .oh .cbtn { margin-left: auto; }
     .orchself .tok.sub { margin-top: 2px; }
@@ -559,6 +560,7 @@
           <option value="claude-opus-5-5">Opus 5.5</option>
         </select>
       </div>
+      <div id="orchSlot"></div>
 
       <div id="messagesContainer" class="messages">
         <div class="message assistant">
@@ -898,8 +900,8 @@
       const state = o.compacting ? 'COMPACTING' : o.busy ? 'WORKING' : 'IDLE';
       return `<div class="orchself" title="The orchestrator's own usage. Dollar figures are estimates from token counts (${o.pricedModel ? 'priced model' : 'unpriced model, Haiku rates used'}). It compacts itself at the context line.">
         <div class="oh"><b class="t">Orchestrator (me)</b><span class="mdl">${state}</span><button class="cbtn" data-orch-compact title="Compact the orchestrator's conversation now">${ic('fold')} Compact</button></div>
-        <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}"><span class="ctxl">context <b data-k="o:ctx" data-n>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)}` : ''}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
-        <div class="tok"><span>in <b data-k="o:in" data-n>${fmtTok(o.cumulative.input)}</b></span><span>out <b data-k="o:out" data-n>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b data-k="o:cr" data-n>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b>${usd(o.perHour.usd)}</b> last hour</span></div>
+        <div class="ctxrow ${c.pct >= 100 ? 'hot' : c.pct >= 75 ? 'warm' : ''}"><span class="ctxl">context <b>${fmtTok(c.tokens)}</b>${c.compactAt ? ` / ${fmtTok(c.compactAt)}` : ''}</span><span class="ctxbar"><i style="width:${pct}%"></i></span></div>
+        <div class="tok"><span>in <b>${fmtTok(o.cumulative.input)}</b></span><span>out <b>${fmtTok(o.cumulative.output)}</b></span><span>cache read <b>${fmtTok(o.cumulative.cacheRead)}</b></span><span><b>${usd(o.perHour.usd)}</b> last hour</span></div>
       </div>`;
     }
     function fleetBar(st, agents) {
@@ -1259,7 +1261,7 @@
     async function refreshTerminals() {
       try {
         const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plans`).then((r) => r.json()).catch(() => ({}))]);
-        lastStatus = st; plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
+        lastStatus = st; { const slot = document.getElementById('orchSlot'); if (slot) slot.innerHTML = orchCard(st.orchestrator); } plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
         const agents = st.agents || [];
         if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
@@ -1267,7 +1269,7 @@
         if (typing) return;
         const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
         const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + orchCard(st.orchestrator) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
+        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents) + vizPanel(agents) + summaryStrip(st)
           + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
         paintDiff(terminalsContainer);
         for (const sid of rawOpen) {
