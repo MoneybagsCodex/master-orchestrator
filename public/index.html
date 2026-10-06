@@ -360,13 +360,16 @@
       box-shadow: var(--sh-1), inset 0 1px 0 var(--hl);
       transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease), transform var(--t) var(--ease), padding var(--t) var(--ease);
     }
-    .agent-card.collapsed { padding: 8px 14px; }
-    .agent-card.collapsed .agent-details { display: none; }
-    .agent-card.collapsed .agent-header { display: flex; align-items: center; gap: 10px; justify-content: space-between; min-width: 0; }
-    .agent-header { display: none; }
+    .agent-header { display: none; align-items: center; gap: 10px; justify-content: space-between; min-width: 0; }
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
     .agent-header-meta { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
+    .agent-details { display: block; }
+    .agent-card.collapsed { padding: 8px 14px; }
+    .agent-card.collapsed .agent-header { display: flex; }
+    .agent-card.collapsed .agent-details { display: none; }
+    .agent-card.open .agent-header { display: none; }
+    .agent-card.open .agent-details { display: block; }
     .agent-card::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--state); opacity: .85; }
     .agent-card.collapsed::before { top: 8px; bottom: 8px; }
     .agent-card.st-working { --state: var(--success); }
