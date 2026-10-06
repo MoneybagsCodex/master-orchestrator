@@ -131,7 +131,9 @@
       --accent: #ff8a1f; --accent-strong: #b84808; --success: #7ee08a; --warning: #ffd24d; --danger: #ff7c8c; --info: #5ccbff;
       --danger-text: #ffd9d2;
     }
-    .theme-picker { margin-left: auto; }
+    .controls-group { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+    .settings-picker { min-width: 120px; }
+    .theme-picker { min-width: 100px; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
@@ -601,18 +603,35 @@
     <div class="terminals-panel">
       <div class="terminals-header">
         <h2><svg class="i" aria-hidden="true"><use href="#i-compass"/></svg> Your agents</h2>
-        <select id="themePicker" class="model-picker theme-picker" aria-label="Color theme" title="Color theme">
-          <option value="dark">Dark</option>
-          <option value="light">Light</option>
-          <option value="slate">Slate</option>
-          <option value="ocean">Ocean</option>
-          <option value="sunset">Sunset</option>
-          <option value="orange">Orange</option>
-          <option value="forest">Forest</option>
-          <option value="midnight">Midnight</option>
-          <option value="nord">Nord</option>
-          <option value="dracula">Dracula</option>
-        </select>
+        <div class="controls-group">
+          <select id="personalityPicker" class="model-picker settings-picker" aria-label="Personality" title="Communication tone and style">
+            <option value="">Personality</option>
+            <option value="professional">Professional</option>
+            <option value="casual">Casual</option>
+            <option value="witty">Witty</option>
+            <option value="formal">Formal</option>
+            <option value="minimal">Minimal</option>
+          </select>
+          <select id="detailLevelPicker" class="model-picker settings-picker" aria-label="Detail level" title="Information verbosity">
+            <option value="">Detail Level</option>
+            <option value="minimal">Minimal</option>
+            <option value="normal">Normal</option>
+            <option value="verbose">Verbose</option>
+            <option value="debug">Debug</option>
+          </select>
+          <select id="themePicker" class="model-picker theme-picker" aria-label="Color theme" title="Color theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+            <option value="slate">Slate</option>
+            <option value="ocean">Ocean</option>
+            <option value="sunset">Sunset</option>
+            <option value="orange">Orange</option>
+            <option value="forest">Forest</option>
+            <option value="midnight">Midnight</option>
+            <option value="nord">Nord</option>
+            <option value="dracula">Dracula</option>
+          </select>
+        </div>
       </div>
 
       <div id="terminalsContainer" class="terminals-content">
@@ -632,7 +651,14 @@
     const messagesContainer = document.getElementById('messagesContainer');
     const modelPicker = document.getElementById('modelPicker');
     const themePicker = document.getElementById('themePicker');
-    { // theme: the <head> script applied the saved choice before paint; this keeps the dropdown in sync and saves changes
+    const personalityPicker = document.getElementById('personalityPicker');
+    const detailLevelPicker = document.getElementById('detailLevelPicker');
+
+    // Initialize orchestrator URL early so functions can use it
+    const ORCHESTRATOR_URL = window.ORCH_URL || 'http://localhost:3003';
+
+    // ---- Theme persistence and application
+    {
       const THEMES = ['dark', 'light', 'slate', 'ocean', 'sunset', 'orange', 'forest', 'midnight', 'nord', 'dracula'];
       let saved = 'dark';
       try { const t = localStorage.getItem('theme'); if (THEMES.includes(t)) saved = t; } catch { /* storage unavailable */ }
@@ -641,11 +667,53 @@
       themePicker.addEventListener('change', () => {
         document.documentElement.setAttribute('data-theme', themePicker.value);
         try { localStorage.setItem('theme', themePicker.value); } catch { /* storage unavailable */ }
+        sendSettingsToOrchestrator();
       });
     }
+
+    // ---- Personality and detail level settings
+    function loadOrchestratorSettings() {
+      try {
+        const personality = localStorage.getItem('orch-personality') || '';
+        const detailLevel = localStorage.getItem('orch-detail-level') || '';
+        personalityPicker.value = personality;
+        detailLevelPicker.value = detailLevel;
+      } catch { /* storage unavailable */ }
+    }
+
+    function sendSettingsToOrchestrator() {
+      const personality = personalityPicker.value || 'professional';
+      const detailLevel = detailLevelPicker.value || 'normal';
+      const settings = {
+        personality: personality,
+        detailLevel: detailLevel,
+        theme: themePicker.value
+      };
+
+      try {
+        localStorage.setItem('orch-personality', personality);
+        localStorage.setItem('orch-detail-level', detailLevel);
+      } catch { /* storage unavailable */ }
+
+      // Send to dashboard server (which forwards to orchestrator)
+      fetch('/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      }).catch(() => { /* fail silently */ });
+    }
+
+    personalityPicker.addEventListener('change', () => {
+      sendSettingsToOrchestrator();
+    });
+
+    detailLevelPicker.addEventListener('change', () => {
+      sendSettingsToOrchestrator();
+    });
+
+    loadOrchestratorSettings();
     const terminalsContainer = document.getElementById('terminalsContainer');
 
-    const ORCHESTRATOR_URL = window.ORCH_URL || 'http://localhost:3003';
     // Terminal list comes via the orchestrator, which merges in cockpit labels (older bridges lack them).
     const BRIDGE_URL = ORCHESTRATOR_URL;
 

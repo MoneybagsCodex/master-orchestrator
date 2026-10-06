@@ -16,6 +16,10 @@ You type (or speak) to the orchestrator in plain language. It reads the real sta
 - Voice input (browser speech recognition) as well as typing, streaming conversation with a model picker (Haiku, Sonnet, Opus), a stop button, and delivery status under each message (sent, received, working, replied).
 - A card with the orchestrator's own health: idle / working / compacting, context size against its auto-compact line, token use (in, out, cache read) and spend over the last hour, and a Compact button. The "flag agents over N tokens" threshold lives here too.
 - Notes and toasts for things that matter: an agent finished, a message is held for approval, the conversation was compacted.
+- **Communication preferences** (top right): Personality and Detail Level dropdowns to customize orchestrator responses:
+  - **Personality:** Professional (default), Casual, Witty, Formal, Minimal — affects tone and style of communication.
+  - **Detail Level:** Minimal, Normal (default), Verbose, Debug — controls how much information is included in responses.
+  - Settings are saved in browser storage and sent to the orchestrator to influence its response style.
 
 **Right: your agents and plans**
 - **Fleet bar:** how many agents are working, idle or blocked, how many need you, how many are over the context flag, plan progress.

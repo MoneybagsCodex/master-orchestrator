@@ -33,6 +33,31 @@ app.get('/api/terminals', async (req, res) => {
   }
 });
 
+// Store and forward orchestrator settings (personality, detail level, theme)
+let orchestratorSettings = {
+  personality: 'professional',
+  detailLevel: 'normal',
+  theme: 'dark'
+};
+
+app.post('/settings', (req, res) => {
+  const { personality, detailLevel, theme } = req.body;
+
+  if (personality) orchestratorSettings.personality = personality;
+  if (detailLevel) orchestratorSettings.detailLevel = detailLevel;
+  if (theme) orchestratorSettings.theme = theme;
+
+  // Forward settings to orchestrator server so it can adapt responses
+  axios.post(`${ORCHESTRATOR_URL}/settings`, orchestratorSettings, { timeout: 2000 })
+    .catch((err) => console.error('[settings] orchestrator offline:', err.message));
+
+  res.json({ ok: true, settings: orchestratorSettings });
+});
+
+app.get('/settings', (req, res) => {
+  res.json(orchestratorSettings);
+});
+
 // Serve the main page
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, '../public/index.html'));
