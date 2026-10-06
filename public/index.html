@@ -131,9 +131,11 @@
       --accent: #ff8a1f; --accent-strong: #b84808; --success: #7ee08a; --warning: #ffd24d; --danger: #ff7c8c; --info: #5ccbff;
       --danger-text: #ffd9d2;
     }
-    .controls-group { margin-left: auto; display: flex; gap: 8px; align-items: center; }
-    .settings-picker { min-width: 120px; }
-    .theme-picker { min-width: 100px; }
+    .theme-picker { margin-left: auto; }
+
+    /* Orchestrator communication settings */
+    .orch-settings { display: flex; gap: 8px; padding: 0 var(--s-4) var(--s-2); border-bottom: 1px solid var(--line); background: rgba(var(--wash), .01); }
+    .settings-picker { flex: 1; min-width: 120px; }
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { height: 100%; }
@@ -579,6 +581,25 @@
       </div>
       <div id="orchSlot"></div>
 
+      <!-- Orchestrator Communication Preferences -->
+      <div class="orch-settings">
+        <select id="personalityPicker" class="model-picker settings-picker" aria-label="Personality" title="Communication tone and style">
+          <option value="">Personality</option>
+          <option value="professional">Professional</option>
+          <option value="casual">Casual</option>
+          <option value="witty">Witty</option>
+          <option value="formal">Formal</option>
+          <option value="minimal">Minimal</option>
+        </select>
+        <select id="detailLevelPicker" class="model-picker settings-picker" aria-label="Detail level" title="Information verbosity">
+          <option value="">Detail Level</option>
+          <option value="minimal">Minimal</option>
+          <option value="normal">Normal</option>
+          <option value="verbose">Verbose</option>
+          <option value="debug">Debug</option>
+        </select>
+      </div>
+
       <div id="messagesContainer" class="messages">
         <div class="message assistant">
           Hi! I'm your master orchestration agent. What would you like me to orchestrate?
@@ -603,35 +624,18 @@
     <div class="terminals-panel">
       <div class="terminals-header">
         <h2><svg class="i" aria-hidden="true"><use href="#i-compass"/></svg> Your agents</h2>
-        <div class="controls-group">
-          <select id="personalityPicker" class="model-picker settings-picker" aria-label="Personality" title="Communication tone and style">
-            <option value="">Personality</option>
-            <option value="professional">Professional</option>
-            <option value="casual">Casual</option>
-            <option value="witty">Witty</option>
-            <option value="formal">Formal</option>
-            <option value="minimal">Minimal</option>
-          </select>
-          <select id="detailLevelPicker" class="model-picker settings-picker" aria-label="Detail level" title="Information verbosity">
-            <option value="">Detail Level</option>
-            <option value="minimal">Minimal</option>
-            <option value="normal">Normal</option>
-            <option value="verbose">Verbose</option>
-            <option value="debug">Debug</option>
-          </select>
-          <select id="themePicker" class="model-picker theme-picker" aria-label="Color theme" title="Color theme">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-            <option value="slate">Slate</option>
-            <option value="ocean">Ocean</option>
-            <option value="sunset">Sunset</option>
-            <option value="orange">Orange</option>
-            <option value="forest">Forest</option>
-            <option value="midnight">Midnight</option>
-            <option value="nord">Nord</option>
-            <option value="dracula">Dracula</option>
-          </select>
-        </div>
+        <select id="themePicker" class="model-picker theme-picker" aria-label="Color theme" title="Color theme">
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="slate">Slate</option>
+          <option value="ocean">Ocean</option>
+          <option value="sunset">Sunset</option>
+          <option value="orange">Orange</option>
+          <option value="forest">Forest</option>
+          <option value="midnight">Midnight</option>
+          <option value="nord">Nord</option>
+          <option value="dracula">Dracula</option>
+        </select>
       </div>
 
       <div id="terminalsContainer" class="terminals-content">
