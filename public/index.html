@@ -358,9 +358,17 @@
       --state: var(--text-3); position: relative; background: linear-gradient(180deg, rgba(var(--wash), .025), transparent 60px), var(--surface-2);
       border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px 10px 17px; cursor: pointer; font-size: var(--fs-md); line-height: 1.45; flex: none;
       box-shadow: var(--sh-1), inset 0 1px 0 var(--hl);
-      transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease), transform var(--t) var(--ease);
+      transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease), transform var(--t) var(--ease), padding var(--t) var(--ease);
     }
+    .agent-card.collapsed { padding: 8px 14px; }
+    .agent-card.collapsed .agent-details { display: none; }
+    .agent-card.collapsed .agent-header { display: flex; align-items: center; gap: 10px; justify-content: space-between; min-width: 0; }
+    .agent-header { display: none; }
+    .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
+    .agent-header-meta { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
     .agent-card::before { content: ''; position: absolute; left: 0; top: 10px; bottom: 10px; width: 3px; border-radius: 0 3px 3px 0; background: var(--state); opacity: .85; }
+    .agent-card.collapsed::before { top: 8px; bottom: 8px; }
     .agent-card.st-working { --state: var(--success); }
     .agent-card.st-blocked { --state: var(--warning); background: linear-gradient(180deg, var(--warning-soft), transparent 90px), var(--surface-2); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
     .agent-card:hover { border-color: var(--line-strong); background: linear-gradient(180deg, rgba(var(--wash), .04), transparent 70px), var(--surface-3); box-shadow: var(--sh-2), inset 0 1px 0 var(--hl); transform: translateY(-1px); }
@@ -1041,24 +1049,37 @@
       const tasks = (a.tasks || []).map((t) => askRow(t.text, t.status, t.reply, t.sentAt));
       const pendingMsgs = (a.messages || []).filter((m) => m.state === 'sent' || m.state === 'released' || m.state === 'held').length;
       const oneLine = latest ? (latest.loop ? `🔁 Goal loop ×${latest.loop.count}` : `› ${esc((latest.said || latest.asked).slice(0, 110))}`) : '';
-      return `<div class="agent-card st-${esc(String(a.state || 'unknown').toLowerCase())} ${open ? 'open' : ''}" data-sid="${esc(a.sid)}" data-k="c:${esc(a.sid)}">
-        <div class="row1"><span class="dot"></span><b class="ttl">${esc(a.topic || a.label)}</b>
-          <span class="pill">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ${ic('clock')}</span>` : ''}${mini}</div>
-        ${stepChip(a)}
-        ${working}
-        ${actBar(a)}
-        ${tokLine(a)}
-        ${errBlock(a)}
-        ${a.doing && !open ? `<div class="doing">${ic('clock')} ${esc(a.doing)}</div>` : ''}
-        ${standBlock(a, open)}
-        ${open ? `<div class="xpand" data-k="x:${esc(a.sid)}">
-          ${a.doing ? `<div class="doing">${ic('clock')} now: ${esc(a.doing)}</div>` : ''}
-          ${a.hasGoalLoop ? `<div class="note">Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
-          ${msgs.length || tasks.length ? `<div class="tasks">${msgs.join('')}${tasks.join('')}</div>` : ''}
-          <div class="muted small">id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong) · ${ago(a.secondsSinceActivity)}
-            · <button class="linkbtn" data-raw-toggle="${esc(a.sid)}">${rawOpen.has(a.sid) ? 'hide' : 'show'} raw screen</button></div>
-          ${rawOpen.has(a.sid) ? `<pre class="raw" data-raw="${esc(a.sid)}">loading…</pre>` : ''}</div>` : ''}
-        <div class="foot"><button class="linkbtn" data-convo="${esc(a.sid)}" data-title="${esc(a.topic || a.label)}">${ic('file')} Full conversation</button></div>
+      const ctxPct = a.tokens ? Math.round((a.tokens.context / 128000) * 100) : 0;
+      const lastActivity = a.secondsSinceActivity ? (a.secondsSinceActivity < 60 ? 'now' : a.secondsSinceActivity < 300 ? '<1m' : a.secondsSinceActivity < 3600 ? Math.floor(a.secondsSinceActivity / 60) + 'm' : Math.floor(a.secondsSinceActivity / 3600) + 'h') : '?';
+      return `<div class=”agent-card st-${esc(String(a.state || 'unknown').toLowerCase())} ${open ? 'open' : 'collapsed'}” data-sid=”${esc(a.sid)}” data-k=”c:${esc(a.sid)}”>
+        <div class=”agent-header”>
+          <span class=”dot”></span>
+          <span class=”agent-header-name”>${esc(a.topic || a.label)}</span>
+          <div class=”agent-header-status”>
+            <span class=”pill”>${name}</span>
+            <span class=”agent-header-meta” title=”Context usage”>${ctxPct}%</span>
+            <span class=”agent-header-meta” title=”Last activity”>${lastActivity}</span>
+          </div>
+        </div>
+        <div class=”agent-details”>
+          <div class=”row1”><span class=”dot”></span><b class=”ttl”>${esc(a.topic || a.label)}</b>
+            <span class=”pill”>${name}</span>${pendingMsgs ? `<span class=”badge” title=”Messages sent to it that are still unanswered”>${pendingMsgs} ${ic('clock')}</span>` : ''}${mini}</div>
+          ${stepChip(a)}
+          ${working}
+          ${actBar(a)}
+          ${tokLine(a)}
+          ${errBlock(a)}
+          ${a.doing && !open ? `<div class=”doing”>${ic('clock')} ${esc(a.doing)}</div>` : ''}
+          ${standBlock(a, open)}
+          ${open ? `<div class=”xpand” data-k=”x:${esc(a.sid)}”>
+            ${a.doing ? `<div class=”doing”>${ic('clock')} now: ${esc(a.doing)}</div>` : ''}
+            ${a.hasGoalLoop ? `<div class=”note”>Has a /goal loop${a.goal ? ` (“${esc(a.goal.slice(0, 90))}”)` : ''}: it restarts itself when idle, so it may flicker.</div>` : ''}
+            ${msgs.length || tasks.length ? `<div class=”tasks”>${msgs.join('')}${tasks.join('')}</div>` : ''}
+            <div class=”muted small”>id ${esc(a.sid.slice(0, 8))} · panel label “${esc(a.label)}” (labels can be wrong) · ${ago(a.secondsSinceActivity)}
+              · <button class=”linkbtn” data-raw-toggle=”${esc(a.sid)}”>${rawOpen.has(a.sid) ? 'hide' : 'show'} raw screen</button></div>
+            ${rawOpen.has(a.sid) ? `<pre class=”raw” data-raw=”${esc(a.sid)}”>loading…</pre>` : ''}</div>` : ''}
+          <div class=”foot”><button class=”linkbtn” data-convo=”${esc(a.sid)}” data-title=”${esc(a.topic || a.label)}”>${ic('file')} Full conversation</button></div>
+        </div>
       </div>`;
     }
 
@@ -1451,7 +1472,15 @@
       if (e.target.closest('[data-toggle-standing]')) { standingOpen = !standingOpen; refreshTerminals(); return; }
       if (btn || e.target.closest('input')) return;
       const card = e.target.closest('.agent-card'); if (!card) return;
-      const sid = card.dataset.sid; expanded.has(sid) ? expanded.delete(sid) : expanded.add(sid); refreshTerminals();
+      const sid = card.dataset.sid;
+      if (expanded.has(sid)) {
+        expanded.delete(sid);
+        card.classList.add('collapsed');
+      } else {
+        expanded.add(sid);
+        card.classList.remove('collapsed');
+      }
+      refreshTerminals();
     });
     fetch(`${ORCHESTRATOR_URL}/standing`).then((r) => r.json()).then((d) => { standingList = d.standing || []; }).catch(() => {});
 
