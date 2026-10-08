@@ -359,7 +359,9 @@
       border: 1px solid var(--line); border-radius: var(--r-md); padding: 12px 14px 10px 17px; cursor: pointer; font-size: var(--fs-md); line-height: 1.45; flex: none;
       box-shadow: var(--sh-1), inset 0 1px 0 var(--hl);
       transition: border-color var(--t) var(--ease), box-shadow var(--t) var(--ease), background var(--t) var(--ease), transform var(--t) var(--ease), padding var(--t) var(--ease);
+      animation: card-enter .28s var(--ease) backwards;
     }
+    @keyframes card-enter { from { opacity: 0; transform: translateY(8px) scale(.98); } }
     .agent-header { display: none; align-items: center; gap: 10px; justify-content: space-between; min-width: 0; }
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
@@ -377,6 +379,31 @@
     .agent-card:hover { border-color: var(--line-strong); background: linear-gradient(180deg, rgba(var(--wash), .04), transparent 70px), var(--surface-3); box-shadow: var(--sh-2), inset 0 1px 0 var(--hl); transform: translateY(-1px); }
     .agent-card:active { transform: translateY(0) scale(.998); }
     .agent-card.open { border-color: color-mix(in srgb, var(--accent) 45%, transparent); box-shadow: var(--sh-2), 0 0 0 3px var(--accent-soft), inset 0 1px 0 var(--hl); }
+
+    /* ================= Kanban Board Layout ================= */
+    .kanban-board { display: none; flex: 1; overflow-x: auto; overflow-y: hidden; padding: var(--s-3); gap: var(--s-3); }
+    .kanban-board.enabled { display: flex; }
+    .kanban-board.stacked { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+    .kanban-column { flex: 0 0 320px; display: flex; flex-direction: column; min-height: 0; background: rgba(var(--wash), .02); border: 1px solid var(--line); border-radius: var(--r-lg); overflow: hidden; }
+    .kanban-column.stacked { flex: 1; min-height: 280px; }
+    .kanban-column-header { padding: 12px 14px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(var(--wash), .04), transparent); }
+    .kanban-column-title { font-size: var(--fs-sm); font-weight: 650; color: var(--text); display: flex; align-items: center; gap: 8px; }
+    .kanban-column-count { font-size: var(--fs-xs); color: var(--text-3); font-weight: 500; margin-left: auto; }
+    .kanban-column-icon { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+    .kanban-column.idle .kanban-column-icon { background: var(--info); }
+    .kanban-column.working .kanban-column-icon { background: var(--success); }
+    .kanban-column.blocked .kanban-column-icon { background: var(--warning); }
+    .kanban-column.done .kanban-column-icon { background: var(--text-3); }
+    .kanban-cards { flex: 1; overflow-y: auto; padding: var(--s-3); display: flex; flex-direction: column; gap: var(--s-3); }
+    .kanban-cards.empty { display: flex; align-items: center; justify-content: center; }
+    .kanban-cards.empty::after { content: 'No agents'; font-size: var(--fs-sm); color: var(--text-3); }
+    .kanban-card-wrapper { animation: card-enter .28s var(--ease) backwards; draggable: true; cursor: grab; }
+    .kanban-card-wrapper:active { cursor: grabbing; }
+    .kanban-card-wrapper.dragging { opacity: .5; }
+    .kanban-card-wrapper.drag-over { animation: card-lift .16s ease-out forwards; }
+    @keyframes card-lift { from { transform: scale(.98); } to { transform: scale(1.02); } }
+    .kanban-card-wrapper .agent-card { cursor: grab; margin: 0; }
+    .kanban-card-wrapper:active .agent-card { cursor: grabbing; }
     .enter { animation: tile-in .34s var(--ease) backwards; }
     @keyframes tile-in { from { opacity: 0; transform: translateY(10px) scale(.985); } }
 
@@ -537,6 +564,8 @@
       .chat-panel { flex: none; height: 78vh; height: 78dvh; }
       .terminals-panel { flex: none; overflow: visible; }
       .terminals-content { overflow: visible; padding: var(--s-3); }
+      .kanban-board.enabled { flex-direction: column; overflow-x: hidden; overflow-y: auto; }
+      .kanban-board.enabled .kanban-column { flex: 1; min-height: 280px; }
       .fleet { position: static; margin: calc(var(--s-3) * -1) calc(var(--s-3) * -1) 0; padding: 10px var(--s-3); }
       .need { flex-direction: column; }
       .convo { height: 92vh; }
@@ -545,11 +574,12 @@
     /* ================= Reduced motion: no movement, activity shown statically, simple fades only ================= */
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
-      .enter, .message, .sys-note, .working, .toast, .dialog, .convo { animation: fade-in .2s ease-out backwards !important; }
+      .enter, .message, .sys-note, .working, .toast, .dialog, .convo, .card-enter { animation: fade-in .2s ease-out backwards !important; }
       .xpand.enter { max-height: none; }
       .agent-card:hover { transform: none; }
       .act .trk i { left: 0; width: 100%; opacity: .55; }
       [data-n].bump { animation: fade-in .6s ease-out backwards !important; }
+      .kanban-card-wrapper.drag-over { animation: none; transform: none; }
     }
   </style>
 </head>
@@ -636,6 +666,7 @@
     <div class="terminals-panel">
       <div class="terminals-header">
         <h2><svg class="i" aria-hidden="true"><use href="#i-compass"/></svg> Your agents</h2>
+        <button id="kanbanToggle" class="model-picker" style="border: 1px solid var(--line-strong); background: var(--surface-inset); color: var(--text); padding: 7px 12px; font-size: var(--fs-sm); border-radius: var(--r-sm); cursor: pointer; font-weight: 550;" title="Toggle kanban board view">Kanban</button>
         <select id="themePicker" class="model-picker theme-picker" aria-label="Color theme" title="Color theme">
           <option value="dark">Dark</option>
           <option value="light">Light</option>
@@ -648,6 +679,10 @@
           <option value="nord">Nord</option>
           <option value="dracula">Dracula</option>
         </select>
+      </div>
+
+      <div id="kanbanContainer" class="kanban-board">
+        <!-- Kanban columns will be populated here -->
       </div>
 
       <div id="terminalsContainer" class="terminals-content">
@@ -1384,20 +1419,109 @@
       prevKeys = next; firstPaint = false;
     }
 
+    // Kanban view state
+    let kanbanEnabled = false;
+    try { const saved = localStorage.getItem('kanbanEnabled'); if (saved !== null) kanbanEnabled = saved === 'true'; } catch { /* storage unavailable */ }
+
+    // Render a single kanban column
+    function renderKanbanColumn(agents, state, stateLabel, stateKey) {
+      const columnAgents = agents.filter((a) => (a.state || 'unknown').toUpperCase() === state);
+      const cardsHtml = columnAgents.length > 0
+        ? columnAgents.map((a) => `<div class="kanban-card-wrapper" draggable="true" data-sid="${esc(a.sid)}" data-state="${state.toLowerCase()}">${agentCard(a, expanded.has(a.sid))}</div>`).join('')
+        : '';
+      return `<div class="kanban-column ${stateKey}" data-state="${state.toLowerCase()}">
+        <div class="kanban-column-header">
+          <div class="kanban-column-title">
+            <span class="kanban-column-icon"></span>
+            <span>${stateLabel}</span>
+            <span class="kanban-column-count">${columnAgents.length}</span>
+          </div>
+        </div>
+        <div class="kanban-cards ${columnAgents.length === 0 ? 'empty' : ''}" data-state="${state.toLowerCase()}">
+          ${cardsHtml}
+        </div>
+      </div>`;
+    }
+
+    // Render the kanban board
+    function renderKanbanBoard(agents) {
+      const html = `${renderKanbanColumn(agents, 'IDLE', 'Idle', 'idle')}${renderKanbanColumn(agents, 'WORKING', 'Working', 'working')}${renderKanbanColumn(agents, 'BLOCKED', 'Blocked', 'blocked')}${renderKanbanColumn(agents, 'DONE', 'Done', 'done')}`;
+      const kanbanContainer = document.getElementById('kanbanContainer');
+      if (kanbanContainer) {
+        kanbanContainer.innerHTML = html;
+        initKanbanDragDrop();
+      }
+    }
+
+    // Initialize drag-and-drop for kanban cards
+    function initKanbanDragDrop() {
+      const cards = document.querySelectorAll('.kanban-card-wrapper');
+      const columns = document.querySelectorAll('.kanban-cards');
+
+      cards.forEach((card) => {
+        card.addEventListener('dragstart', (e) => {
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', card.dataset.sid);
+          card.classList.add('dragging');
+          setTimeout(() => { card.style.opacity = '0.5'; }, 0);
+        });
+
+        card.addEventListener('dragend', (e) => {
+          card.classList.remove('dragging');
+          card.style.opacity = '1';
+          columns.forEach((col) => col.classList.remove('drag-over'));
+        });
+      });
+
+      columns.forEach((column) => {
+        column.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          column.classList.add('drag-over');
+        });
+
+        column.addEventListener('dragleave', (e) => {
+          if (e.target === column) column.classList.remove('drag-over');
+        });
+
+        column.addEventListener('drop', (e) => {
+          e.preventDefault();
+          column.classList.remove('drag-over');
+          const sid = e.dataTransfer.getData('text/plain');
+          const card = document.querySelector(`[data-sid="${sid}"]`);
+          if (card && card.parentElement !== column) {
+            column.appendChild(card);
+            card.style.opacity = '1';
+          }
+        });
+      });
+    }
+
     async function refreshTerminals() {
       try {
         const [st, pj] = await Promise.all([fetch(`${ORCHESTRATOR_URL}/status`).then((r) => r.json()), fetch(`${ORCHESTRATOR_URL}/plans`).then((r) => r.json()).catch(() => ({}))]);
         lastStatus = st; { const slot = document.getElementById('orchSlot'); if (slot && document.activeElement && document.activeElement.id !== 'ctxThresh') slot.innerHTML = orchCard(st.orchestrator); } plansData = pj.plans || []; planData = { nodes: plansData.flatMap((p) => (p.nodes || []).map((n) => ({ ...n, plan: p.id }))) };
         const agents = st.agents || [];
-        if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; return; }
+        if (st.error) { terminalsContainer.innerHTML = `<div class="empty-state"><div>${esc(st.error)}</div></div>`; document.getElementById('kanbanContainer').innerHTML = ''; return; }
         // Don't wipe the standing-instruction input while someone is typing in it.
         const typing = document.activeElement && (document.activeElement.id === 'standingInput' || document.activeElement.id === 'ctxThresh');
         if (typing) return;
-        const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
-        const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
-        terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents)
-          + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
-        paintDiff(terminalsContainer);
+
+        // Render based on view mode
+        if (kanbanEnabled) {
+          document.getElementById('kanbanContainer').classList.add('enabled');
+          terminalsContainer.style.display = 'none';
+          renderKanbanBoard(agents);
+        } else {
+          document.getElementById('kanbanContainer').classList.remove('enabled');
+          terminalsContainer.style.display = 'flex';
+          const rank = (a) => (a.state === 'BLOCKED' ? 0 : a.state === 'WORKING' ? 1 : 2);   // urgent first, stable within a group
+          const sorted = agents.map((a, i) => [a, i]).sort((x, y) => rank(x[0]) - rank(y[0]) || x[1] - y[1]).map((x) => x[0]);
+          terminalsContainer.innerHTML = fleetBar(st, agents) + needsLane(st.needsYou || []) + planPanel(agents)
+            + (sorted.map(agentCard).join('') || '<div class="empty-state"><div>No agents running</div></div>') + standingPanel();
+          paintDiff(terminalsContainer);
+        }
+
         for (const sid of rawOpen) {
           const pre = terminalsContainer.querySelector(`[data-raw="${sid}"]`);
           if (pre) fetch(`${ORCHESTRATOR_URL}/terminals?tail=1500`).then((r) => r.json()).then((tl) => {
@@ -1432,6 +1556,22 @@
     async function post(path, body) {
       const r = await fetch(`${ORCHESTRATOR_URL}${path}`, { method: ['/decide', '/action', '/standing', '/done/backfill'].includes(path) ? 'POST' : 'DELETE', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
       return r.json();
+    }
+
+    // Kanban toggle
+    const kanbanToggle = document.getElementById('kanbanToggle');
+    if (kanbanToggle) {
+      kanbanToggle.addEventListener('click', () => {
+        kanbanEnabled = !kanbanEnabled;
+        try { localStorage.setItem('kanbanEnabled', String(kanbanEnabled)); } catch { /* storage unavailable */ }
+        kanbanToggle.style.backgroundColor = kanbanEnabled ? 'var(--accent-soft)' : 'var(--surface-inset)';
+        kanbanToggle.style.color = kanbanEnabled ? 'var(--accent)' : 'var(--text)';
+        refreshTerminals();
+      });
+      if (kanbanEnabled) {
+        kanbanToggle.style.backgroundColor = 'var(--accent-soft)';
+        kanbanToggle.style.color = 'var(--accent)';
+      }
     }
 
     terminalsContainer.addEventListener('change', (e) => {
