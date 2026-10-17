@@ -366,18 +366,21 @@
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
     .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; }
-    .agent-tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 6px; min-width: 0; cursor: pointer; }
-    .ptile { height: 48px; min-width: 0; padding: 4px 8px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.3; overflow: hidden; }
-    .ptile.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-    .ptile.status { border-left: 3px solid var(--tc); display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+    .agent-tiles { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2.6fr) minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 6px; min-width: 0; cursor: pointer; }
+    .ptile { height: 66px; min-width: 0; padding: 5px 8px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.3; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+    .ptile.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; justify-content: flex-start; }
+    .ptile.task { font-size: var(--fs-sm); line-height: 1.35; color: var(--text); -webkit-line-clamp: 3; }
+    .ptile.task b { font-weight: 600; color: var(--accent); }
+    .ptile.ident { border-left: 3px solid var(--tc); }
     .ptile-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
     .ptile-top b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ptile-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tc); flex: none; }
     .ptile-meta { color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ptile.activity { color: var(--text-2); }
-    .ptile.activity b { color: var(--text); font-weight: 600; }
-    .ptile.blocker { color: #ef4444; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
-    .ptile.none { color: var(--text-3); display: flex; align-items: center; }
+    .ptile.tok { font-size: var(--fs-sm); }
+    .ptile.tok.warn { border-color: var(--warning); color: var(--warning); }
+    .ptile.issue.ok { color: var(--text-3); }
+    .ptile.issue.warn { color: var(--warning); }
+    .ptile.issue.blocker { color: #ef4444; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
     .agent-essential { display: none; margin-top: 3px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
     .agent-card.collapsed .agent-essential { display: block; }
     .agent-essential .ess-need { color: var(--warning); font-weight: 600; }
@@ -1096,19 +1099,24 @@
       const lastErr = (a.recentErrors || []).slice(-1)[0];
       const statusColor = lastErr && a.state !== 'BLOCKED' ? '#ef4444' : color;
       const name = a.topic || a.label || 'untitled';
-      const mode = [label, a.tokens?.total ? `${fmtTokens(a.tokens.total)} tokens` : '', ago(a.secondsSinceActivity)].filter(Boolean).join(' · ');
-      const desc = a.headline || a.doing || 'No current activity';
-      const blocker = a.state === 'BLOCKED' ? `Needs you: ${a.prompt || 'permission prompt'}`
-        : lastErr ? `Error: ${lastErr.text}` : '';
+      const task = a.headline || a.doing || 'No current task';
+      const used = a.tokens?.context || 0;
+      const over = used > ctxThreshold;
+      const issue = a.state === 'BLOCKED' ? { cls: 'blocker', text: `Needs you: ${a.prompt || 'permission prompt'}` }
+        : lastErr ? { cls: 'blocker', text: `Error: ${lastErr.text}` }
+        : over ? { cls: 'warn', text: `Context over ${fmtTokens(ctxThreshold)}` }
+        : { cls: 'ok', text: 'OK' };
       return `<div class="agent-tiles" data-tile-sid="${esc(a.sid)}">
-        <div class="ptile status" style="--tc:${statusColor}" title="${esc(name)}">
+        <div class="ptile ident" style="--tc:${statusColor}" title="${esc(name)}">
           <div class="ptile-top"><span class="ptile-dot"></span><b>${esc(name)}</b></div>
-          <div class="ptile-meta">${esc(mode)}</div>
+          <div class="ptile-meta">${esc(label)} · ${esc(ago(a.secondsSinceActivity) || 'no activity data')}</div>
         </div>
-        <div class="ptile activity clamp" title="${esc(name + ': ' + desc)}"><b>${esc(name)}</b> ${esc(desc)}</div>
-        ${blocker
-          ? `<div class="ptile blocker clamp" title="${esc(blocker)}">${esc(blocker)}</div>`
-          : `<div class="ptile none">No blockers</div>`}
+        <div class="ptile task clamp" title="${esc(name + ': ' + task)}"><b>${esc(name)}</b> ${esc(task)}</div>
+        <div class="ptile tok${over ? ' warn' : ''}" title="Context used / threshold (dashboard setting)">
+          <div class="ptile-meta">context</div>
+          <div><b>${fmtTokens(used)}</b> / ${fmtTokens(ctxThreshold)}</div>
+        </div>
+        <div class="ptile issue ${issue.cls} clamp" title="${esc(issue.text)}">${esc(issue.text)}</div>
       </div>`;
     }
 
