@@ -366,7 +366,7 @@
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
     .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; }
-    .agent-tiles { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2.6fr) minmax(0, 0.9fr) minmax(0, 1.4fr); gap: 6px; min-width: 0; cursor: pointer; }
+    .agent-tiles { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 2.4fr) minmax(0, 1.25fr) minmax(0, 1.4fr); gap: 6px; min-width: 0; cursor: pointer; }
     .ptile { height: 66px; min-width: 0; padding: 5px 8px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.3; overflow: hidden; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
     .ptile.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; justify-content: flex-start; }
     .ptile.task { font-size: var(--fs-sm); line-height: 1.35; color: var(--text); -webkit-line-clamp: 3; }
@@ -376,11 +376,13 @@
     .ptile-top b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ptile-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tc); flex: none; }
     .ptile-meta { color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ptile.tok { font-size: var(--fs-sm); }
+    .ptile.tok { font-size: var(--fs-xs); }
     .ptile.tok.warn { border-color: var(--warning); color: var(--warning); }
     .ptile.issue.ok { color: var(--text-3); }
     .ptile.issue.warn { color: var(--warning); }
     .ptile.issue.blocker { color: #ef4444; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
+    .ptile.issue.clamp { -webkit-line-clamp: 3; overflow-wrap: anywhere; }
+    .ptile.task, .ptile.tok { overflow-wrap: anywhere; }
     .agent-essential { display: none; margin-top: 3px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
     .agent-card.collapsed .agent-essential { display: block; }
     .agent-essential .ess-need { color: var(--warning); font-weight: 600; }
@@ -1113,8 +1115,8 @@
         </div>
         <div class="ptile task clamp" title="${esc(name + ': ' + task)}"><b>${esc(name)}</b> ${esc(task)}</div>
         <div class="ptile tok${over ? ' warn' : ''}" title="Context used / threshold (dashboard setting)">
-          <div class="ptile-meta">context</div>
           <div><b>${fmtTokens(used)}</b> / ${fmtTokens(ctxThreshold)}</div>
+          <div class="ptile-meta">context</div>
         </div>
         <div class="ptile issue ${issue.cls} clamp" title="${esc(issue.text)}">${esc(issue.text)}</div>
       </div>`;
