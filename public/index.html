@@ -365,6 +365,11 @@
     .agent-header { display: none; align-items: center; gap: 10px; justify-content: space-between; min-width: 0; }
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
+    .agent-essential { display: none; margin-top: 3px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
+    .agent-card.collapsed .agent-essential { display: block; }
+    .agent-essential .ess-need { color: var(--warning); font-weight: 600; }
+    .agent-essential .ess-err { color: var(--danger, #e5484d); }
+    .agent-essential .ess-activity { color: var(--text-2); }
     .agent-header-meta { font-size: var(--fs-xs); color: var(--text-3); white-space: nowrap; }
     .agent-details { display: block; }
     .agent-card.collapsed { padding: 6px 10px; }
@@ -1093,18 +1098,18 @@
       const tasks = (a.tasks || []).map((t) => askRow(t.text, t.status, t.reply, t.sentAt));
       const pendingMsgs = (a.messages || []).filter((m) => m.state === 'sent' || m.state === 'released' || m.state === 'held').length;
       const oneLine = latest ? (latest.loop ? `🔁 Goal loop ×${latest.loop.count}` : `› ${esc((latest.said || latest.asked).slice(0, 110))}`) : '';
-      const ctxPct = a.tokens ? Math.round((a.tokens.context / 128000) * 100) : 0;
-      const lastActivity = a.secondsSinceActivity ? (a.secondsSinceActivity < 60 ? 'now' : a.secondsSinceActivity < 300 ? '<1m' : a.secondsSinceActivity < 3600 ? Math.floor(a.secondsSinceActivity / 60) + 'm' : Math.floor(a.secondsSinceActivity / 3600) + 'h') : '?';
+      const lastErr = (a.recentErrors || []).slice(-1)[0];
+      const essentialLine = a.state === 'BLOCKED'
+        ? `<span class="ess-need">Needs you: ${esc(a.prompt ? a.prompt.slice(0, 80) : 'permission prompt')}</span>`
+        : lastErr ? `<span class="ess-err">Error: ${esc(String(lastErr.text).slice(0, 80))}</span>`
+        : `<span class="ess-activity">${esc((a.headline || a.doing || 'No current activity').slice(0, 90))}</span>`;
       return `<div class="agent-card st-${esc(String(a.state || 'unknown').toLowerCase())} ${open ? 'open' : 'collapsed'}${seenSids.has(a.sid) ? ' seen' : ''}" data-sid="${esc(a.sid)}" data-k="c:${esc(a.sid)}">
         <div class="agent-header">
           <span class="dot"></span>
           <span class="agent-header-name">${esc(a.topic || a.label)}</span>
-          <div class="agent-header-status">
-            <span class="pill">${name}</span>
-            <span class="agent-header-meta" title="Context usage">${ctxPct}%</span>
-            <span class="agent-header-meta" title="Last activity">${lastActivity}</span>
-          </div>
+          <div class="agent-header-status"><span class="pill">${name}</span></div>
         </div>
+        <div class="agent-essential">${essentialLine}</div>
         <div class="agent-details">
           <div class="row1"><span class="dot"></span><b class="ttl">${esc(a.topic || a.label)}</b>
             <span class="pill">${name}</span>${pendingMsgs ? `<span class="badge" title="Messages sent to it that are still unanswered">${pendingMsgs} ${ic('clock')}</span>` : ''}${mini}</div>
