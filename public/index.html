@@ -366,14 +366,18 @@
     .agent-header-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-header-status { display: flex; align-items: center; gap: 8px; flex: none; }
     .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 6px; }
-    .agent-tiles { display: flex; gap: 6px; min-width: 0; cursor: pointer; }
-    .ptile { display: flex; align-items: center; gap: 6px; min-width: 0; height: 26px; padding: 0 8px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--fs-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .ptile.status { flex: 0 0 auto; max-width: 42%; border-left: 3px solid var(--tc); }
-    .ptile.status b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+    .agent-tiles { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr); gap: 6px; min-width: 0; cursor: pointer; }
+    .ptile { height: 48px; min-width: 0; padding: 4px 8px; border-radius: var(--r-sm); background: var(--surface-2); border: 1px solid var(--line); font-size: var(--fs-xs); line-height: 1.3; overflow: hidden; }
+    .ptile.clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .ptile.status { border-left: 3px solid var(--tc); display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+    .ptile-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .ptile-top b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .ptile-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--tc); flex: none; }
-    .ptile-state { color: var(--text-3); font-size: var(--fs-xs); flex: none; }
-    .ptile.activity { flex: 1 1 0; color: var(--text-2); }
-    .ptile.blocker { flex: 1 1 0; color: #ef4444; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
+    .ptile-meta { color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ptile.activity { color: var(--text-2); }
+    .ptile.activity b { color: var(--text); font-weight: 600; }
+    .ptile.blocker { color: #ef4444; border-color: color-mix(in srgb, #ef4444 40%, transparent); }
+    .ptile.none { color: var(--text-3); display: flex; align-items: center; }
     .agent-essential { display: none; margin-top: 3px; font-size: var(--fs-sm); line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-2); }
     .agent-card.collapsed .agent-essential { display: block; }
     .agent-essential .ess-need { color: var(--warning); font-weight: 600; }
@@ -1086,17 +1090,25 @@
       return `<div class="act ${x.phase}"><div class="lbl"><b>${label}</b><span>${x.steps} step${x.steps === 1 ? '' : 's'} · ${t}</span></div><div class="trk"><i></i></div></div>`;
     }
 
+    function fmtTokens(n) { return !n ? '0' : n >= 1e6 ? (n / 1e6).toFixed(1) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(n); }
     function agentTiles(a) {
       const [color, label] = STATE_STYLE[a.state] || STATE_STYLE.UNKNOWN;
       const lastErr = (a.recentErrors || []).slice(-1)[0];
       const statusColor = lastErr && a.state !== 'BLOCKED' ? '#ef4444' : color;
-      const needs = a.state === 'BLOCKED' ? `Needs you: ${a.prompt ? a.prompt.slice(0, 60) : 'permission prompt'}`
-        : lastErr ? `Error: ${String(lastErr.text).slice(0, 60)}` : '';
-      const activity = (a.headline || a.doing || 'No current activity').slice(0, 90);
+      const name = a.topic || a.label || 'untitled';
+      const mode = [label, a.tokens?.total ? `${fmtTokens(a.tokens.total)} tokens` : '', ago(a.secondsSinceActivity)].filter(Boolean).join(' · ');
+      const desc = a.headline || a.doing || 'No current activity';
+      const blocker = a.state === 'BLOCKED' ? `Needs you: ${a.prompt || 'permission prompt'}`
+        : lastErr ? `Error: ${lastErr.text}` : '';
       return `<div class="agent-tiles" data-tile-sid="${esc(a.sid)}">
-        <div class="ptile status" style="--tc:${statusColor}"><span class="ptile-dot"></span><b>${esc(a.topic || a.label)}</b><span class="ptile-state">${label}</span></div>
-        <div class="ptile activity" title="${esc(activity)}">${esc(activity)}</div>
-        ${needs ? `<div class="ptile blocker" title="${esc(needs)}">${esc(needs)}</div>` : ''}
+        <div class="ptile status" style="--tc:${statusColor}" title="${esc(name)}">
+          <div class="ptile-top"><span class="ptile-dot"></span><b>${esc(name)}</b></div>
+          <div class="ptile-meta">${esc(mode)}</div>
+        </div>
+        <div class="ptile activity clamp" title="${esc(name + ': ' + desc)}"><b>${esc(name)}</b> ${esc(desc)}</div>
+        ${blocker
+          ? `<div class="ptile blocker clamp" title="${esc(blocker)}">${esc(blocker)}</div>`
+          : `<div class="ptile none">No blockers</div>`}
       </div>`;
     }
 
